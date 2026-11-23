@@ -1,6 +1,7 @@
 # A/B OTA: meshnode-ota CLI plus the systemd units that gate committing a trial boot.
 #
-#   meshnode-ota update <bundle>  -> writes inactive slot, sets tryboot.txt, `reboot "0 tryboot"`
+#   meshnode-ota update <bundle>  -> verify signature + build number, write inactive slot,
+#                                    set tryboot.txt, `reboot "0 tryboot"`
 #   trial boot                    -> meshnode-ota-health must pass before boot-complete.target
 #   boot-complete.target reached  -> meshnode-ota-commit rewrites config.txt to the new slot
 #   no commit within trialTimeout -> plain reboot, firmware reads config.txt = old slot
@@ -8,15 +9,41 @@
 { config, lib, pkgs, ... }:
 let
   cfg = config.meshnode.ota;
+
+  # "ssh-ed25519 AAAA... comment" -> "ssh-ed25519 AAAA..."
+  keyFields = key: lib.concatStringsSep " " (lib.take 2 (lib.filter (x: x != "") (lib.splitString " " (lib.trim key))));
+
+  allowedSigners = pkgs.writeText "meshnode-ota-allowed-signers" (lib.concatStrings
+    (lib.mapAttrsToList (name: key: ''${name} namespaces="meshnode-ota" ${keyFields key}
+    '') cfg.trustedKeys));
+
   ota = pkgs.writeShellApplication {
     name = "meshnode-ota";
-    runtimeInputs = with pkgs; [ coreutils util-linux zstd gnutar curl jq gnused systemd ];
-    text = builtins.replaceStrings [ "@BOARD@" ] [ config.meshnode.board ]
+    runtimeInputs = with pkgs; [ coreutils util-linux zstd gnutar curl jq gnused systemd openssh ];
+    text = builtins.replaceStrings
+      [ "@BOARD@" "@ALLOWED_SIGNERS@" "@REQUIRE_SIG@" ]
+      [ config.meshnode.board "${allowedSigners}" (if cfg.requireSignature then "1" else "0") ]
       (builtins.readFile ../scripts/meshnode-ota.sh);
   };
 in
 {
   options.meshnode.ota = {
+    trustedKeys = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = { };
+      example = { raine-tkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA..."; };
+      description = ''
+        SSH public keys allowed to sign OTA bundles, keyed by signer name. Any key type
+        `ssh-keygen -Y` supports works, including hardware-backed `sk-ssh-ed25519@openssh.com`.
+        hosts/default.nix fills this from keys/*.pub. To rotate, ship one signed release that
+        trusts both the old and new key, then drop the old one.
+      '';
+    };
+    requireSignature = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Refuse OTA bundles without a valid signature from trustedKeys. Only disable for local experiments.";
+    };
     healthUnits = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
@@ -36,6 +63,15 @@ in
   };
 
   config = {
+    assertions = [{
+      assertion = cfg.requireSignature -> cfg.trustedKeys != { };
+      message = ''
+        meshnode.ota.requireSignature is on but no OTA signing keys are trusted, so this image
+        could never accept an update. Add your public key as keys/<name>.pub (see keys/README.md),
+        `git add` it, and rebuild - or set meshnode.ota.requireSignature = false for experiments.
+      '';
+    }];
+
     environment.systemPackages = [ ota ];
     meshnode.ota.healthUnits = [ "sshd.service" ];
 

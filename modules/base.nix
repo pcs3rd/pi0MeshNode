@@ -40,6 +40,11 @@ in
       default = "0.0.0-dev";
       description = "Release string baked into /etc/meshnode-release and OTA manifests.";
     };
+    buildNumber = lib.mkOption {
+      type = lib.types.ints.unsigned;
+      default = 0;
+      description = "Monotonic build number (the flake sets the commit time). OTA refuses bundles that are not newer.";
+    };
     sshKeys = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
@@ -219,7 +224,8 @@ in
     systemd.watchdog.runtimeTime = "15s";
     systemd.watchdog.rebootTime = "2m";
 
-    environment.etc."meshnode-release".text = "${cfg.board} ${cfg.version}\n";
+    environment.etc."meshnode-release".text = "${cfg.board} ${cfg.version} build ${toString cfg.buildNumber}\n";
+    environment.etc."meshnode-build".text = "${toString cfg.buildNumber}\n";
 
     # ---------------------------------------------------------------- networking
     networking.hostName = lib.mkDefault ""; # set at runtime from node.env (see node-config.nix)

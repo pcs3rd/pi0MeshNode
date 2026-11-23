@@ -147,7 +147,8 @@ in
         EOF
       '';
 
-    # Everything `meshnode-ota update` needs; serve the directory over HTTP(S) or copy it to the node.
+    # Everything `meshnode-ota update` needs except the signature: sign it with
+    # scripts/sign-ota.sh (outside Nix, so the private key never touches the store).
     otaBundle = bp.runCommand "meshnode-${board}-${version}-ota"
       { nativeBuildInputs = with bp; [ zstd gnutar jq ]; }
       ''
@@ -163,7 +164,8 @@ in
           --arg bootSum "$(sha256sum $out/boot.tar.zst | cut -d' ' -f1)" \
           --arg rawSum "$(sha256sum ${slotFs} | cut -d' ' -f1)" \
           --argjson rawSize "$(stat -c %s ${slotFs})" \
-          '{format: 2, board: $board, version: $version, toplevel: $toplevel,
+          --argjson build ${toString config.meshnode.buildNumber} \
+          '{format: 3, board: $board, version: $version, build: $build, toplevel: $toplevel,
             slotfs: {file: "slotfs.img.zst", sha256: $fsSum, rawSha256: $rawSum, rawSize: $rawSize},
             boot:   {file: "boot.tar.zst",   sha256: $bootSum}}' > $out/manifest.json
       '';

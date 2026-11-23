@@ -11,6 +11,8 @@
       lib = nixpkgs.lib;
 
       version = "0.1.0+${self.shortRev or self.dirtyShortRev or "dirty"}";
+      # Monotonic build number for OTA anti-rollback: the commit time of the flake source.
+      buildNumber = self.lastModified or 0;
 
       boards = {
         pi0 = { module = ./boards/pi0.nix; host = lib.systems.examples.raspberryPi; }; # armv6l, always cross
@@ -34,6 +36,7 @@
               nixpkgs.hostPlatform = boards.${board}.host;
               nixpkgs.buildPlatform = buildSystem;
               meshnode.version = lib.mkDefault version;
+              meshnode.buildNumber = lib.mkDefault buildNumber;
             }
           ] ++ extraModules;
         };
@@ -55,7 +58,7 @@
 
       devShells = lib.genAttrs shellSystems (system:
         let pkgs = nixpkgs.legacyPackages.${system}; in {
-          default = pkgs.mkShell { packages = with pkgs; [ mtools zstd jq ]; };
+          default = pkgs.mkShell { packages = with pkgs; [ mtools zstd jq openssh ]; };
         });
     };
 }

@@ -3,3 +3,5 @@ result-*
 *.img
 *.img.zst
 secrets/
+signed/
+ota-*
