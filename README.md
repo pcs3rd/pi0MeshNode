@@ -308,10 +308,17 @@ loads `i2c-dev`, and adds meshtasticd's user to the `i2c` group. Change the bus 
   and chrony sets the system clock from it. Use this on off-grid nodes: the Pi has no real-time
   clock, so without network time a node boots with the wrong time. Wire the module's PPS pin
   to a GPIO and set `meshnode.meshtastic.gps.ppsGpio = <BCM number>` for sub-millisecond time.
+  Without PPS (the default, and e.g. the M100 Mini, which has no PPS pin) chrony uses the
+  NMEA sentence timing, which is good to roughly 100 ms. That's plenty for logs and TLS on a
+  node with no RTC.
   gpsd and chrony add some RAM and closure, which matters on a Zero.
 
 Enabling GPS takes the kernel console and serial login off pins 8/10, since they share them
-(`meshnode.rpi.serialConsole`). It also adds `dtoverlay=disable-bt`, so the full UART is on
+(`meshnode.rpi.serialConsole`). HDMI is off by default too (`meshnode.rpi.hdmi = false`):
+the firmware keeps the HDMI output powered down, about 25 mA saved on a Zero, and there are no
+virtual terminals. With both off, a node is reachable only over the network (SSH or Tailscale
+SSH), so make sure a key is in place before deploying one somewhere awkward. Set
+`meshnode.rpi.hdmi = true` on a bench node. It also adds `dtoverlay=disable-bt`, so the full UART is on
 the header and the device is `/dev/ttyAMA0` on every board. Without that, Bluetooth boards
 (Zero W, Zero 2 W, 3, 4) put the weaker mini UART (`/dev/ttyS0`) there. Wi-Fi is unaffected.
 Turn it off with `meshnode.meshtastic.gps.disableBluetooth = false` and set
@@ -329,7 +336,7 @@ GPIOs aren't 5 V tolerant.
 | GPS | GND | 6 (GND) |
 | GPS | TX → | 10 (GPIO15, RXD) |
 | GPS | RX ← | 8 (GPIO14, TXD) |
-| GPS | PPS (optional, gpsd mode) | e.g. 12 (GPIO18) → `ppsGpio = 18` |
+| GPS | PPS (only if the module has one; gpsd mode) | e.g. 12 (GPIO18) → `ppsGpio = 18` |
 | I2C sensor (BME280/680 …) | VIN | 17 (3.3 V) |
 | I2C sensor | GND | 9 (GND) |
 | I2C sensor | SDA | 3 (GPIO2) |

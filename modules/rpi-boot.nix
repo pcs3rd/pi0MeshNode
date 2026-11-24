@@ -19,6 +19,13 @@ let
     gpu_mem=16
     dtparam=spi=on
     dtparam=i2c_arm=on
+    ${lib.optionalString (!cfg.hdmi) ''
+      # Headless: keep the HDMI PHY off (~25 mA on a Zero). The image never loads the vc4 KMS
+      # driver, so the firmware's legacy display options still apply.
+      hdmi_blanking=2
+      hdmi_force_hotplug=0
+      hdmi_ignore_hotplug=1
+    ''}
     ${cfg.extraConfig}
   '';
 
@@ -41,6 +48,16 @@ in
         Raspberry Pi SoC generation for the vendor kernel build (nixos-hardware's
         raspberry-pi/common/kernel.nix): 1 = BCM2835 (Pi 1, Zero), 3 = BCM2837 (Pi 3,
         Zero 2), 4 = BCM2711. It picks the vendor defconfig.
+      '';
+    };
+    hdmi = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        HDMI output plus a console and login on it. Off by default (headless nodes save ~25 mA):
+        the firmware keeps HDMI powered down and there are no virtual terminals. With HDMI off
+        and the serial console off (a GPS on the UART), the only way in is the network
+        (SSH / Tailscale SSH).
       '';
     };
     serialConsole = lib.mkOption {
@@ -91,7 +108,9 @@ in
       (final: prev: { makeModulesClosure = x: prev.makeModulesClosure (x // { allowMissing = true; }); })
     ];
 
-    boot.kernelParams = lib.optional cfg.serialConsole "console=serial0,115200" ++ [ "console=tty1" ];
+    boot.kernelParams = lib.optional cfg.serialConsole "console=serial0,115200"
+      ++ lib.optional cfg.hdmi "console=tty1";
+    console.enable = cfg.hdmi; # no virtual terminals / gettys on a headless node
 
     nixpkgs.config.allowUnfreePredicate = pkg:
       builtins.elem (lib.getName pkg) [ "raspberrypi-firmware" "raspberrypi-wireless-firmware" ];
