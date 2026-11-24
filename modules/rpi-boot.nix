@@ -43,6 +43,14 @@ in
         Zero 2), 4 = BCM2711. It picks the vendor defconfig.
       '';
     };
+    serialConsole = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Kernel console + login on the header UART (GPIO14/15, pins 8/10). Turned off by default
+        when a serial GPS is enabled (meshnode.meshtastic.gps), since they share those pins.
+      '';
+    };
     extraConfig = lib.mkOption {
       type = lib.types.lines;
       default = "";
@@ -83,7 +91,7 @@ in
       (final: prev: { makeModulesClosure = x: prev.makeModulesClosure (x // { allowMissing = true; }); })
     ];
 
-    boot.kernelParams = [ "console=serial0,115200" "console=tty1" ];
+    boot.kernelParams = lib.optional cfg.serialConsole "console=serial0,115200" ++ [ "console=tty1" ];
 
     nixpkgs.config.allowUnfreePredicate = pkg:
       builtins.elem (lib.getName pkg) [ "raspberrypi-firmware" "raspberrypi-wireless-firmware" ];

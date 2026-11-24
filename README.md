@@ -301,6 +301,44 @@ sensors on it (temperature/humidity/pressure and similar). The image sets `dtpar
 loads `i2c-dev`, and adds meshtasticd's user to the `i2c` group. Change the bus with
 `meshnode.meshtastic.i2c.device`, or turn it off with `meshnode.meshtastic.i2c.enable = false`.
 
+**GPS** (any 3.3 V UART GPS, such as an HGLRC M100 Mini) on the header UART is enabled by default:
+
+- **`mode = "serial"`** (default): meshtasticd reads the module directly (`GPS.SerialPath`).
+- **`mode = "gpsd"`**: gpsd owns the module, meshtasticd reads it from gpsd (`GPS.GpsdHost`),
+  and chrony sets the system clock from it. Use this on off-grid nodes: the Pi has no real-time
+  clock, so without network time a node boots with the wrong time. Wire the module's PPS pin
+  to a GPIO and set `meshnode.meshtastic.gps.ppsGpio = <BCM number>` for sub-millisecond time.
+  gpsd and chrony add some RAM and closure, which matters on a Zero.
+
+Enabling GPS takes the kernel console and serial login off pins 8/10, since they share them
+(`meshnode.rpi.serialConsole`). It also adds `dtoverlay=disable-bt`, so the full UART is on
+the header and the device is `/dev/ttyAMA0` on every board. Without that, Bluetooth boards
+(Zero W, Zero 2 W, 3, 4) put the weaker mini UART (`/dev/ttyS0`) there. Wi-Fi is unaffected.
+Turn it off with `meshnode.meshtastic.gps.disableBluetooth = false` and set
+`gps.device = "/dev/ttyS0"`. meshtasticd probes the module's baud rate itself. If it never
+gets a fix, check the raw output with `stty -F /dev/ttyAMA0 9600 && cat /dev/ttyAMA0` (try
+115200 too): readable `$GN…`/`$GP…` sentences mean the wiring is right. Disable GPS with
+`meshnode.meshtastic.gps.enable = false`.
+
+**Wiring** (physical header pins; same on every 40-pin Pi). Power both from 3.3 V: the Pi's
+GPIOs aren't 5 V tolerant.
+
+| Device | Signal | Pi pin |
+|--------|--------|--------|
+| GPS | VCC | 1 (3.3 V) |
+| GPS | GND | 6 (GND) |
+| GPS | TX → | 10 (GPIO15, RXD) |
+| GPS | RX ← | 8 (GPIO14, TXD) |
+| GPS | PPS (optional, gpsd mode) | e.g. 12 (GPIO18) → `ppsGpio = 18` |
+| I2C sensor (BME280/680 …) | VIN | 17 (3.3 V) |
+| I2C sensor | GND | 9 (GND) |
+| I2C sensor | SDA | 3 (GPIO2) |
+| I2C sensor | SCL | 5 (GPIO3) |
+
+GPS TX goes to Pi RX and vice versa. Swapped TX/RX is the most common reason a GPS shows
+nothing. Several I2C sensors can share pins 3/5 as long as their addresses differ (BME
+sensors are 0x76 or 0x77).
+
 ## Boot time
 
 What's done to keep boot fast, especially on the single-core Pi Zero:
@@ -396,4 +434,7 @@ This template was written without a Nix evaluator, so expect a few fix-up rounds
 - [ ] `lib.trim` exists in your nixpkgs (used by `modules/ota.nix` to normalise keys)
 - [ ] meshtasticd reaches the MeshStick as its own user (udev rule + libusb), and
       `services.meshtasticd.user`/`group` exist under those option names
+- [ ] `dtoverlay=disable-bt` puts the PL011 (`ttyAMA0`) on GPIO14/15 on every board, and
+      the packaged meshtasticd version reads `GPS.SerialPath` / `GPS.GpsdHost`
+- [ ] gpsd + chrony SHM/PPS refclocks lock (`chronyc sources`), and the closure cost on pi0
 - [ ] imperative Wi-Fi path (`/etc/wpa_supplicant/imperative.conf` vs `/etc/wpa_supplicant.conf`)

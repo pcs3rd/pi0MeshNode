@@ -3,7 +3,9 @@
 # Defaults: Elecrow MeshStick (CH341 USB-to-SPI + SX1262) as the radio, and the Pi's
 # I2C bus (/dev/i2c-1 on the 40-pin header) for sensors, which meshtasticd auto-detects.
 # A Heltec T114 running the t114-ch341 firmware (github.com/pcs3rd/t114-ch341) is the
-# "t114-ch341" preset. Every value is mkDefault, so hosts/default.nix can override any of them.
+# "t114-ch341" preset. A serial GPS on the header UART (pins 8/10) is on by default too, read
+# directly by meshtasticd or through gpsd (which can also discipline the clock via chrony).
+# Every value is mkDefault, so hosts/default.nix can override any of them.
 { config, lib, pkgs, ... }:
 let
   cfg = config.meshnode.meshtastic;
@@ -71,6 +73,41 @@ in
         doesn't save brightness, so this runs again whenever the bridge re-enumerates. Applies to
         any attached T114 (matched by its USB product string), whatever the radio preset.
       '';
+    };
+    gps = {
+      enable = lib.mkEnableOption "a serial GPS on the header UART (GPIO14 TXD / GPIO15 RXD)" // { default = true; };
+      mode = lib.mkOption {
+        type = lib.types.enum [ "serial" "gpsd" ];
+        default = "serial";
+        description = ''
+          "serial": meshtasticd reads the GPS itself (GPS.SerialPath) - least RAM and closure.
+          "gpsd": gpsd owns the GPS, meshtasticd reads it from gpsd (GPS.GpsdHost), and chrony
+          uses it to set the clock. Worth it on off-grid nodes: the Pi has no RTC.
+        '';
+      };
+      device = lib.mkOption {
+        type = lib.types.str;
+        default = "/dev/ttyAMA0";
+        description = ''
+          Serial device for the GPS. With disableBluetooth (default) the full UART is on pins
+          8/10 on every board, so it is /dev/ttyAMA0 everywhere. Without it, boards with
+          Bluetooth (Zero W, Zero 2 W, 3, 4) have the mini UART there: /dev/ttyS0.
+        '';
+      };
+      disableBluetooth = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Add dtoverlay=disable-bt so the full PL011 UART (ttyAMA0) is on the header. Wi-Fi is unaffected.";
+      };
+      ppsGpio = lib.mkOption {
+        type = lib.types.nullOr lib.types.ints.unsigned;
+        default = null;
+        example = 18;
+        description = ''
+          gpsd mode only: BCM GPIO number wired to the GPS module's PPS output. Adds
+          dtoverlay=pps-gpio and has chrony lock to it for sub-millisecond time.
+        '';
+      };
     };
     i2c = {
       enable = lib.mkEnableOption "I2C sensors (temperature, pressure, etc.) via the Pi's I2C bus" // { default = true; };
@@ -141,6 +178,52 @@ in
       };
       services.udev.extraRules = ''
         ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1a86", ATTR{idProduct}=="5512", ATTR{product}=="*T114*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="meshnode-t114-leds.service"
+      '';
+    })
+
+    (lib.mkIf cfg.gps.enable {
+      # The GPS uses the header UART, so the kernel console and serial getty move off it.
+      meshnode.rpi.serialConsole = lib.mkDefault false;
+      meshnode.rpi.extraConfig = lib.mkIf cfg.gps.disableBluetooth ''
+        dtoverlay=disable-bt
+      '';
+    })
+
+    (lib.mkIf (cfg.gps.enable && cfg.gps.mode == "serial") {
+      services.meshtasticd.settings.GPS.SerialPath = lib.mkDefault cfg.gps.device;
+      users.users.${svc.user}.extraGroups = [ "dialout" ]; # /dev/ttyAMA0 is root:dialout 0660
+    })
+
+    (lib.mkIf (cfg.gps.enable && cfg.gps.mode == "gpsd") {
+      services.gpsd = {
+        enable = true;
+        devices = [ cfg.gps.device ];
+        nowait = true;   # keep reading (and feeding chrony) with no clients connected
+        readonly = true; # never reconfigure the module
+      };
+      services.meshtasticd.settings.GPS = {
+        GpsdHost = lib.mkDefault "localhost";
+        GpsdPort = lib.mkDefault config.services.gpsd.port;
+      };
+      systemd.services.meshtasticd = {
+        wants = [ "gpsd.service" ];
+        after = [ "gpsd.service" ];
+      };
+
+      # gpsd publishes GPS time in NTP shared memory segment 0; chrony reads it. Network NTP
+      # servers stay as a fallback for nodes that are online.
+      services.chrony = {
+        enable = true;
+        extraConfig = ''
+          # The Pi has no RTC: step the clock whenever it is far off, not just at startup.
+          makestep 1 -1
+          refclock SHM 0 refid GPS precision 1e-1 offset 0.0 delay 0.2${lib.optionalString (cfg.gps.ppsGpio != null) " noselect"}
+          ${lib.optionalString (cfg.gps.ppsGpio != null) "refclock PPS /dev/pps0 lock GPS refid PPS precision 1e-7"}
+        '';
+      };
+      meshnode.state.directories = [ "/var/lib/chrony" ];
+      meshnode.rpi.extraConfig = lib.mkIf (cfg.gps.ppsGpio != null) ''
+        dtoverlay=pps-gpio,gpiopin=${toString cfg.gps.ppsGpio}
       '';
     })
 
