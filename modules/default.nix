@@ -7,5 +7,6 @@
     ./node-config.nix
     ./tailscale.nix
     ./meshtastic.nix
+    ./cross-fixes.nix
   ];
 }

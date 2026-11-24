@@ -441,7 +441,8 @@ This template was written without a Nix evaluator, so expect a few fix-up rounds
 - [ ] the `extraStructuredConfig` EROFS/overlay options are accepted by the rpi kernel configs
 - [ ] nixos-hardware's `raspberry-pi/common/kernel.nix` builds for each `rpiVersion`, and its DTB
       paths (`dtbs/` on armv6l, `dtbs/broadcom/` on aarch64, `dtbs/overlays/`) match `rpi-boot.nix`
-- [ ] `services.meshtasticd` builds for **armv6l** (upstream lists only x86_64/aarch64 for meshtasticd)
+- [ ] meshtasticd cross-builds via `modules/cross-fixes.nix` (build-machine platformio + cross
+      gcc/pkg-config on PATH) and the result is an ARM binary; upstream lists only x86_64/aarch64
 - [ ] the static Tailscale package works with the NixOS tailscale module (it uses `systemd.packages`)
 - [ ] on hardware: `reboot "0 tryboot"` selects `tryboot.txt` on Zero / Zero 2 W / 3 firmware, and
       `meshnode-ota commit` and rollback both behave
