@@ -321,9 +321,13 @@ What's done to keep boot fast, especially on the single-core Pi Zero:
   - The initrd is LZ4 at HC level (`-l -12`) instead of zstd.
 - **Nothing waits on the network** (`wait-online` off).
 
-`meshnode.rpi.ensureErofs` (default on) forces EROFS + LZ4 and overlayfs on in the vendor
-kernel config. That makes the kernel a local build. If your kernel already has them, turn it off
-to use the cached kernel (check with `zcat /proc/config.gz | grep -E 'EROFS|OVERLAY'`).
+The Raspberry Pi vendor kernel comes from nixos-hardware's kernel builder
+(`raspberry-pi/common/kernel.nix`, selected by `meshnode.rpi.rpiVersion`), because nixpkgs
+removed its `linux_rpi*` packages. Only the kernel builder is used. nixos-hardware's board
+profiles boot through U-Boot/extlinux, which would bypass the firmware A/B path. The vendor
+defconfigs already include EROFS (with LZ4) and overlayfs. This kernel isn't in any binary cache,
+so every board builds it locally on the first build. That builder sets its own patch list, so
+`boot.kernelPatches` doesn't apply to it.
 
 Measure on hardware with `systemd-analyze critical-chain` / `systemd-analyze blame`. To see
 what's heavy in the closure:
@@ -381,7 +385,8 @@ This template was written without a Nix evaluator, so expect a few fix-up rounds
       evaluate together, and nothing else in the closure expects a writable `/nix`
 - [ ] `mkfs.erofs` flags (`-zlz4hc,12 --all-root -T0 -L`) match the erofs-utils in your nixpkgs
 - [ ] the `extraStructuredConfig` EROFS/overlay options are accepted by the rpi kernel configs
-- [ ] `linuxPackages_rpi1/3/4` still exist in your nixpkgs, and their DTB paths match `rpi-boot.nix`
+- [ ] nixos-hardware's `raspberry-pi/common/kernel.nix` builds for each `rpiVersion`, and its DTB
+      paths (`dtbs/` on armv6l, `dtbs/broadcom/` on aarch64, `dtbs/overlays/`) match `rpi-boot.nix`
 - [ ] `services.meshtasticd` builds for **armv6l** (upstream lists only x86_64/aarch64 for meshtasticd)
 - [ ] the static Tailscale package works with the NixOS tailscale module (it uses `systemd.packages`)
 - [ ] on hardware: `reboot "0 tryboot"` selects `tryboot.txt` on Zero / Zero 2 W / 3 firmware, and

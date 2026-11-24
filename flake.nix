@@ -4,9 +4,13 @@
   inputs = {
     # meshtasticd + services.meshtasticd live in recent nixpkgs; pin with `nix flake lock`.
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # Raspberry Pi vendor kernels (nixpkgs dropped linux_rpi*). Only its kernel builder is
+    # used - not its board profiles, which boot through U-Boot/extlinux instead of the
+    # firmware A/B path this repo relies on.
+    nixos-hardware.url = "github:NixOS/nixos-hardware";
   };
 
-  outputs = { self, nixpkgs, ... }:
+  outputs = { self, nixpkgs, nixos-hardware, ... }:
     let
       lib = nixpkgs.lib;
 
@@ -22,7 +26,8 @@
       };
 
       # Machines that can run the build. aarch64 boards built on aarch64-linux (native
-      # or binfmt-emulated) hit the binary cache; built from x86_64-linux they cross-compile.
+      # or binfmt-emulated) hit the binary cache for everything but the vendor kernel;
+      # built from x86_64-linux they cross-compile.
       buildSystems = [ "x86_64-linux" "aarch64-linux" ];
       shellSystems = buildSystems ++ [ "aarch64-darwin" "x86_64-darwin" ];
 
@@ -33,6 +38,7 @@
             boards.${board}.module
             ./hosts/default.nix
             {
+              _module.args.nixos-hardware = nixos-hardware;
               nixpkgs.hostPlatform = boards.${board}.host;
               nixpkgs.buildPlatform = buildSystem;
               meshnode.version = lib.mkDefault version;

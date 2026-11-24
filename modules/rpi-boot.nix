@@ -1,7 +1,7 @@
 # Direct firmware boot (no U-Boot): the Pi firmware loads kernel/initrd/DTBs from
 # slot_a/ or slot_b/ on the FIRMWARE partition via os_prefix. This is what makes the
 # firmware "tryboot" A/B mechanism work identically on Pi Zero, Zero 2 W, 3 and 4.
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, nixos-hardware, ... }:
 let
   cfg = config.meshnode.rpi;
   kernel = config.boot.kernelPackages.kernel;
@@ -35,10 +35,13 @@ in
       type = lib.types.bool;
       description = "Boot the kernel in 64-bit mode (arm_64bit=1).";
     };
-    ensureErofs = lib.mkOption {
-      type = lib.types.bool;
-      default = true;
-      description = "Force EROFS (+ LZ4) and overlayfs on in the kernel config.";
+    rpiVersion = lib.mkOption {
+      type = lib.types.enum [ 1 2 3 4 5 ];
+      description = ''
+        Raspberry Pi SoC generation for the vendor kernel build (nixos-hardware's
+        raspberry-pi/common/kernel.nix): 1 = BCM2835 (Pi 1, Zero), 3 = BCM2837 (Pi 3,
+        Zero 2), 4 = BCM2711. It picks the vendor defconfig.
+      '';
     };
     extraConfig = lib.mkOption {
       type = lib.types.lines;
@@ -68,19 +71,14 @@ in
     boot.initrd.compressor = "lz4";
     boot.initrd.compressorArgs = [ "-l" "-12" ];
 
-    # The store slot and the /etc overlay are EROFS. Make sure the vendor kernel has it
-    # (with LZ4 decompression). This makes the kernel a local build; if
-    # `zcat /proc/config.gz | grep EROFS` on your kernel already shows EROFS_FS + EROFS_FS_ZIP,
-    # set meshnode.rpi.ensureErofs = false to keep using the cached kernel.
-    boot.kernelPatches = lib.mkIf cfg.ensureErofs [{
-      name = "meshnode-erofs";
-      patch = null;
-      extraStructuredConfig = with lib.kernel; {
-        EROFS_FS = module;
-        EROFS_FS_ZIP = yes;
-        OVERLAY_FS = module;
-      };
-    }];
+    # Raspberry Pi vendor kernel. nixpkgs removed linux_rpi*; nixos-hardware now builds it
+    # (pinned raspberrypi/linux tag, vendor defconfig). Not in any binary cache, so it is
+    # always a local build. The vendor defconfigs already have EROFS (=m, LZ4 decompression
+    # on by default) and overlayfs, which the store slot and /etc overlay need.
+    # Note: that builder sets its own kernelPatches, so boot.kernelPatches has no effect on
+    # it - use boot.kernelPackages = ... (argsOverride) for kernel config changes.
+    boot.kernelPackages = lib.mkDefault (pkgs.linuxPackagesFor
+      (pkgs.callPackage "${nixos-hardware}/raspberry-pi/common/kernel.nix" { inherit (cfg) rpiVersion; }));
     nixpkgs.overlays = [
       (final: prev: { makeModulesClosure = x: prev.makeModulesClosure (x // { allowMissing = true; }); })
     ];

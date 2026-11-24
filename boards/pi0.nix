@@ -1,10 +1,10 @@
 # Raspberry Pi Zero / Zero W (BCM2835, ARMv6, 512 MB). Always cross-compiled:
 # there is no binary cache for armv6l, so the first build compiles the whole closure.
-{ pkgs, ... }:
+{ ... }:
 {
   meshnode.board = "pi0";
   meshnode.rpi.arm64 = false;
-  boot.kernelPackages = pkgs.linuxPackages_rpi1;
+  meshnode.rpi.rpiVersion = 1; # BCM2835: bcmrpi_defconfig vendor kernel
 
   zramSwap.memoryPercent = 75;
   meshnode.rootTmpfsSize = "64M";
