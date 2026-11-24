@@ -12,6 +12,10 @@ in
     # "ssh-ed25519 AAAA... you@workstation"
   ];
 
+  # TEMPORARY: OTA signature checking is off, so nodes accept ANY bundle they're pointed at.
+  # Add a key to keys/ (see keys/README.md) and delete this line before deploying anywhere.
+  meshnode.ota.requireSignature = false;
+
   meshnode.ota.trustedKeys = lib.mapAttrs'
     (f: _: lib.nameValuePair (lib.removeSuffix ".pub" f) (lib.fileContents (../keys + "/${f}")))
     keyFiles;
