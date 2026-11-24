@@ -55,8 +55,8 @@ in
     boot.loader.generic-extlinux-compatible.enable = false;
     hardware.deviceTree.enable = false; # the firmware loads DTBs + overlays itself
 
-    # systemd as PID 1 *and* in stage 1.
-    boot.initrd.systemd.enable = true;
+    # systemd runs as PID 1 *and* in stage 1. nixpkgs has removed the scripted initrd, so
+    # the systemd initrd is the only one and needs no option.
 
     # Vendor kernels lack many of NixOS' default initrd modules; keep the list tiny
     # and let the closure builder skip anything that is built in or absent.

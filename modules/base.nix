@@ -262,6 +262,14 @@ in
     };
 
     users.mutableUsers = false;
+    # The image deliberately has no passwords, and SSH keys may arrive only at runtime: per-node
+    # authorized_keys injected by scripts/personalize-image.sh, or Tailscale SSH. NixOS can't see
+    # either at build time, so its lockout assertion is replaced by the warning below.
+    users.allowNoPasswordLogin = true;
+    warnings = lib.optional (cfg.sshKeys == [ ] && !config.meshnode.tailscale.ssh) ''
+      meshnode: no fleet SSH keys (meshnode.sshKeys) and Tailscale SSH is off. The only way in
+      will be keys injected per device with scripts/personalize-image.sh -s.
+    '';
     users.users.mesh = {
       isNormalUser = true;
       extraGroups = [ "wheel" "dialout" ];

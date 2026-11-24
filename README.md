@@ -3,7 +3,7 @@
 NixOS image generator for Raspberry Pi **Zero / Zero W**, **Zero 2 W**, **3** and **4**, running
 **meshtasticd** (Elecrow MeshStick radio and I2C sensors by default) and **Tailscale**, with:
 
-- **systemd everywhere** – PID 1 *and* the initrd (`boot.initrd.systemd.enable`)
+- **systemd everywhere** – PID 1 *and* the initrd (the only initrd nixpkgs still has)
 - **tmpfs root, Nix-free device** – `/` is tmpfs; `/nix/store` is a read-only **EROFS** image per
   slot; no Nix daemon, store DB or `/nix/var` on the node; only `/boot/state` is writable and persistent
 - **fast boot** – no Perl activation (`/etc` overlay image + userborn), lz4hc initrd, lz4hc or
