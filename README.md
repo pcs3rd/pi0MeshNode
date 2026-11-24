@@ -281,6 +281,14 @@ stick needs a USB OTG adapter on the data port.
 
 - **Several sticks on one node:** pin one with `meshnode.meshtastic.usbSerial = "<CH341 serial>"`
   (see `lsusb -v -d 1a86:5512`).
+- **Heltec T114 as the radio:** flash it with [t114-ch341](https://github.com/pcs3rd/t114-ch341)
+  and set `meshnode.meshtastic.radio = "t114-ch341"`. It looks like a MeshStick on USB
+  (`1a86:5512`), so the same udev rule and `usbSerial` pinning apply. Its status LEDs are
+  turned off once the node has been up 30 s (and right away if the T114 is plugged in later):
+  a udev rule matching the T114's USB product string starts `meshnode-t114-leds.service`,
+  which runs `t114ctl brightness 0`. MeshSticks are never sent the request. Change the delay
+  with `meshnode.meshtastic.t114.ledsOffAfterBoot = <seconds>`, or keep the LEDs on with
+  `= null`. `t114ctl` is on the image if you want them back: `sudo t114ctl brightness 24`.
 - **Other radios (SPI HATs, other USB sticks):** set `meshnode.meshtastic.radio = "custom"` and
   translate the matching file from meshtastic/firmware `bin/config.d/` into
   `services.meshtasticd.settings.Lora`. Any single MeshStick value can also be overridden there.
