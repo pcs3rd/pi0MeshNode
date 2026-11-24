@@ -8,7 +8,8 @@ let
   keyFiles = lib.filterAttrs (f: t: t == "regular" && lib.hasSuffix ".pub" f) (builtins.readDir ../keys);
 in
 {
-  # Login user (wheel, passwordless sudo). Console login needs a password; SSH stays key-only.
+  # Login user (wheel, passwordless sudo). Its password works for SSH (meshnode.ssh.passwordAuth,
+  # on by default) and for the console when HDMI is enabled.
   meshnode.user = "meshtastic";
   # Replace "!" (= no password, login disabled) with a hash from:
   #   nix shell nixpkgs#mkpasswd -c mkpasswd

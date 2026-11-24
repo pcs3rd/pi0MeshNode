@@ -54,6 +54,27 @@ in
         which is "meshtasticd".
       '';
     };
+    ssh = {
+      passwordAuth = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Allow SSH login with the login user's password (users.users.<user>.hashedPassword).
+          Nodes are meant to be reached over Tailscale; see tailnetOnly to close the LAN side.
+        '';
+      };
+      tailnetOnly = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Accept SSH only over Tailscale: port 22 is not opened on Ethernet/Wi-Fi. tailscale0
+          is a trusted interface, and on the Pi 0 (userspace networking) tailscaled hands
+          connections to sshd over loopback, which is always allowed. A node then has to be
+          enrolled with a Tailscale auth key (personalize-image.sh -k); it can't be set up over
+          the LAN. Tailscale SSH (--ssh) bypasses sshd and works either way.
+        '';
+      };
+    };
     sshKeys = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
@@ -268,22 +289,26 @@ in
     services.openssh = {
       enable = true;
       settings = {
-        PasswordAuthentication = false;
+        PasswordAuthentication = cfg.ssh.passwordAuth;
         KbdInteractiveAuthentication = false;
         PermitRootLogin = "no";
       };
+      openFirewall = !cfg.ssh.tailnetOnly;
       hostKeys = [{ path = "${stateRoot}/ssh/ssh_host_ed25519_key"; type = "ed25519"; }];
       authorizedKeysFiles = [ "${stateRoot}/meshnode/ssh/authorized_keys" ];
     };
 
     users.mutableUsers = false;
-    # The image deliberately has no passwords, and SSH keys may arrive only at runtime: per-node
-    # authorized_keys injected by scripts/personalize-image.sh, or Tailscale SSH. NixOS can't see
-    # either at build time, so its lockout assertion is replaced by the warning below.
+    # Ways in: the login user's password (hosts/default.nix), SSH keys that may arrive only at
+    # runtime (personalize-image.sh), or Tailscale SSH. NixOS can't see all of those at build
+    # time, so its lockout assertion is replaced by the warning below.
     users.allowNoPasswordLogin = true;
-    warnings = lib.optional (cfg.sshKeys == [ ] && !config.meshnode.tailscale.ssh) ''
-      meshnode: no fleet SSH keys (meshnode.sshKeys) and Tailscale SSH is off. The only way in
-      will be keys injected per device with scripts/personalize-image.sh -s.
+    warnings = lib.optional
+      (cfg.sshKeys == [ ] && !config.meshnode.tailscale.ssh
+        && !(cfg.ssh.passwordAuth && (config.users.users.${cfg.user}.hashedPassword or null) != null
+             && config.users.users.${cfg.user}.hashedPassword != "!")) ''
+      meshnode: no fleet SSH keys, no usable login password and Tailscale SSH is off. The only way
+      in will be keys injected per device with scripts/personalize-image.sh -s.
     '';
     users.users.${cfg.user} = {
       isNormalUser = true;

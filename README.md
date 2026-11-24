@@ -89,6 +89,21 @@ Outputs:
 
 The version is `0.1.0+<git short rev>`. It is set in `flake.nix` and baked into `/etc/meshnode-release`.
 
+## Access
+
+- **Password SSH is on** (`meshnode.ssh.passwordAuth`) for the `meshtastic` user. Set its hash
+  in `hosts/default.nix` (`nix shell nixpkgs#mkpasswd -c mkpasswd`). Until you do, the placeholder
+  `"!"` means no password works. Root login is disabled; `sudo` needs no password.
+- **SSH keys** still work too: fleet-wide in `meshnode.sshKeys`, or per device with
+  `personalize-image.sh -s`.
+- **Tailscale SSH** (`meshnode.tailscale.ssh = true`): `tailscale ssh meshtastic@node-01`,
+  authenticated by your tailnet ACLs, with no password or key.
+- **LAN exposure:** by default port 22 is also open on Ethernet/Wi-Fi, so a fresh node can be set
+  up over the LAN. For deployed nodes, set `meshnode.ssh.tailnetOnly = true` to accept SSH only
+  over Tailscale (and enroll them with `-k`). The repo is public, so treat the password hash as
+  public too: use a long random password, and rely on `tailnetOnly` rather than the password to
+  keep strangers out.
+
 ## Personalize and flash
 
 Device-specific data and secrets are written onto the FAT partition of the *built* image, so none
