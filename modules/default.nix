@@ -2,6 +2,7 @@
   imports = [
     ./base.nix
     ./rpi-boot.nix
+    ./kernel.nix
     ./ab-image.nix
     ./ota.nix
     ./node-config.nix

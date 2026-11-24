@@ -378,10 +378,35 @@ What's done to keep boot fast, especially on the single-core Pi Zero:
 The Raspberry Pi vendor kernel comes from nixos-hardware's kernel builder
 (`raspberry-pi/common/kernel.nix`, selected by `meshnode.rpi.rpiVersion`), because nixpkgs
 removed its `linux_rpi*` packages. Only the kernel builder is used. nixos-hardware's board
-profiles boot through U-Boot/extlinux, which would bypass the firmware A/B path. The vendor
-defconfigs already include EROFS (with LZ4) and overlayfs. This kernel isn't in any binary cache,
-so every board builds it locally on the first build. That builder sets its own patch list, so
-`boot.kernelPatches` doesn't apply to it.
+profiles boot through U-Boot/extlinux, which would bypass the firmware A/B path. This kernel isn't
+in any binary cache, so every board builds it locally.
+
+**Kernel trim** (`modules/kernel.nix`, `meshnode.rpi.kernelTrim`, on by default). The vendor
+config builds drivers for everything a Pi can be plugged into. The image switches off whole
+subsystems a headless mesh node never uses:
+- graphics/DRM, sound, cameras/V4L2/DVB/IR, staging, Bluetooth
+- CAN, NFC, AX.25, 802.15.4, IIO, 1-Wire, joysticks/touchscreens, USB serial, USB gadget mode,
+  USB/IP
+- Wi-Fi chips other than `brcmfmac` and `ath9k_htc`
+- USB Ethernet other than `r8152`/`smsc95xx`/`lan78xx`/CDC
+- filesystems beyond ext4/vfat/erofs/overlay/tmpfs/FUSE
+- software RAID, TPM, MTD, powerline, 6LoWPAN, Open vSwitch
+
+That roughly halves the module count, as checked against the vendor defconfigs:
+
+| Vendor config (boards) | Modules | Built-in |
+|---|---|---|
+| `bcmrpi` (pi0) | 1806 → 812 | 1500 → 1181 |
+| `bcm2711` (pi02w, pi3, pi4) | 1912 → 871 | 1953 → 1619 |
+
+It runs in the kernel's `postConfigure` (`scripts/config --disable …`, then
+`make olddefconfig`). It fails the build if it turns off anything the image relies on: SD/USB
+hosts, the network and Wi-Fi drivers above, I2C/SPI, PPS, the watchdog, TUN, nftables, zram, the
+filesystems, device-mapper and more. Extend it with `kernelTrim.extraDisable` /
+`kernelTrim.extraKeep`, or turn it off with `kernelTrim.enable = false`. Deliberately kept:
+netfilter (Tailscale, firewall), RTC drivers (for an add-on DS3231), hwmon (the Pi's
+undervoltage monitor), bridge/VXLAN/WireGuard/batman-adv and generic HID. `boot.kernelPatches`
+has no effect on this kernel: nixos-hardware's builder sets its own patch list.
 
 Measure on hardware with `systemd-analyze critical-chain` / `systemd-analyze blame`. To see
 what's heavy in the closure:
