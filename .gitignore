@@ -5,3 +5,4 @@ result-*
 secrets/
 signed/
 ota-*
+layout.env
