@@ -6,10 +6,12 @@
   nixpkgs.overlays = [
     (final: prev:
       let
-        isCross = final.stdenv.buildPlatform != final.stdenv.hostPlatform;
-        prefix = final.stdenv.cc.targetPrefix; # e.g. armv6l-unknown-linux-gnueabihf-
+        # Read platforms from prev: the overlay's attribute *names* must not depend on final,
+        # and the decision whether to patch is made inside each attribute.
+        isCross = prev.stdenv.buildPlatform != prev.stdenv.hostPlatform;
+        prefix = prev.stdenv.cc.targetPrefix; # e.g. armv6l-unknown-linux-gnueabihf-
       in
-      lib.optionalAttrs isCross {
+      {
         # meshtasticd builds with `platformio run --environment native-tft`, which breaks
         # under cross in two ways:
         #  1. nixpkgs wraps platformio-core in overridePythonAttrs inside nativeBuildInputs.
@@ -19,7 +21,7 @@
         #     on the build machine would produce an x86 binary.
         # Fix: use the build machine's platformio, and put the cross toolchain (and the cross
         # pkg-config) first on PATH under the unprefixed names PlatformIO calls.
-        meshtasticd = prev.meshtasticd.overrideAttrs (old: {
+        meshtasticd = if !isCross then prev.meshtasticd else prev.meshtasticd.overrideAttrs (old: {
           nativeBuildInputs =
             (lib.filter (p: lib.getName p != "platformio") old.nativeBuildInputs)
             ++ [
