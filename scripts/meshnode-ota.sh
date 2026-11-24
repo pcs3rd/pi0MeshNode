@@ -12,7 +12,9 @@
 # Trust: manifest.json must carry a valid `ssh-keygen -Y` signature (manifest.json.sig,
 # namespace "meshnode-ota") from a key in meshnode.ota.trustedKeys. The manifest pins the
 # sha256 of every payload, the board and a build number; bundles whose build is not newer
-# than anything this node has run are refused (anti-rollback).
+# than anything this node has run are refused (anti-rollback). An image built with
+# signing disabled (meshnode.ota.requireSignature = false) refuses every bundle: there is
+# no unsigned OTA path. Such nodes are updated by reflashing.
 
 set -euo pipefail
 
@@ -125,6 +127,11 @@ fetch() { # fetch <name> <dest>
 
 cleanup() { if [ -n "$WORK" ]; then rm -rf "$WORK"; fi; }
 
+require_ota_enabled() {
+  [ "$REQUIRE_SIG" = 1 ] \
+    || die "OTA is disabled: this image was built with signing off (meshnode.ota.requireSignature = false), so it accepts no bundles. Reflash it, or build with a key in keys/ to enable signed OTA."
+}
+
 set_source() {
   SRC="${1%/}"
   SRC="${SRC%/manifest.json}"
@@ -138,18 +145,15 @@ fetch_and_check_manifest() {
   trap cleanup EXIT
   mf="$WORK/manifest.json"
 
+  require_ota_enabled # defence in depth; callers check first
   fetch manifest.json "$mf"
-  if [ "$REQUIRE_SIG" = 1 ]; then
-    fetch manifest.json.sig "$mf.sig" || die "bundle is not signed (no manifest.json.sig)"
-    signer=$(ssh-keygen -Y find-principals -f "$ALLOWED_SIGNERS" -s "$mf.sig" 2>/dev/null | head -n1) \
-      || die "manifest is not signed by a trusted key"
-    [ -n "$signer" ] || die "manifest is not signed by a trusted key"
-    ssh-keygen -Y verify -q -f "$ALLOWED_SIGNERS" -I "$signer" -n "$NAMESPACE" -s "$mf.sig" < "$mf" > /dev/null \
-      || die "bad signature on manifest.json"
-    log "signature OK (signer: $signer)"
-  else
-    log "WARNING: signature checking is disabled (meshnode.ota.requireSignature = false)"
-  fi
+  fetch manifest.json.sig "$mf.sig" || die "bundle is not signed (no manifest.json.sig)"
+  signer=$(ssh-keygen -Y find-principals -f "$ALLOWED_SIGNERS" -s "$mf.sig" 2>/dev/null | head -n1) \
+    || die "manifest is not signed by a trusted key"
+  [ -n "$signer" ] || die "manifest is not signed by a trusted key"
+  ssh-keygen -Y verify -q -f "$ALLOWED_SIGNERS" -I "$signer" -n "$NAMESPACE" -s "$mf.sig" < "$mf" > /dev/null \
+    || die "bad signature on manifest.json"
+  log "signature OK (signer: $signer)"
 
   # Everything below is read from the now-authenticated manifest.
   [ "$(jq -r .format "$mf")" = "3" ] || die "unsupported manifest format"
@@ -185,12 +189,13 @@ cmd_status() {
   if [ "$REQUIRE_SIG" = 1 ]; then
     echo "signers:   $(cut -d' ' -f1 "$ALLOWED_SIGNERS" | tr '\n' ' ')"
   else
-    echo "signers:   (signature checking DISABLED)"
+    echo "ota:       DISABLED - built without signing; updates require a reflash"
   fi
 }
 
 cmd_verify() {
   [ $# -eq 1 ] || usage
+  require_ota_enabled
   set_source "$1"
   fetch_and_check_manifest 1
   log "bundle verifies; not installed"
@@ -208,6 +213,7 @@ cmd_update() {
     shift
   done
   [ -n "$src" ] || usage
+  require_ota_enabled
   set_source "$src"
 
   local cur com tgt part mf version build fsFile fsSum rawSum rawSize bootFile bootSum stage

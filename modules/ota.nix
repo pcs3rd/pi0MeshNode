@@ -42,7 +42,12 @@ in
     requireSignature = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Refuse OTA bundles without a valid signature from trustedKeys. Only disable for local experiments.";
+      description = ''
+        Signed OTA. When true (the default), nodes install only bundles signed by a key in
+        trustedKeys, and the build fails if there are none. When false, OTA is disabled:
+        `meshnode-ota update`/`verify` refuse every bundle and nodes can only be updated by
+        reflashing. There is never an unsigned OTA path.
+      '';
     };
     healthUnits = lib.mkOption {
       type = lib.types.listOf lib.types.str;
@@ -68,7 +73,8 @@ in
       message = ''
         meshnode.ota.requireSignature is on but no OTA signing keys are trusted, so this image
         could never accept an update. Add your public key as keys/<name>.pub (see keys/README.md),
-        `git add` it, and rebuild - or set meshnode.ota.requireSignature = false for experiments.
+        `git add` it, and rebuild - or set meshnode.ota.requireSignature = false to build an image
+        with OTA disabled (reflash-only).
       '';
     }];
 

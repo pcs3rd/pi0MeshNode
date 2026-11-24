@@ -121,7 +121,9 @@ per-device flags are needed.
 A node has two OS slots. One holds the running, committed system. An update is written to the
 other slot and booted **once** as a trial. It is only made permanent after it proves healthy.
 Nodes only accept bundles that are **signed** by a trusted key and **newer** than anything they
-have run.
+have run. There is no unsigned mode: an image built with
+`meshnode.ota.requireSignature = false` has OTA disabled entirely and refuses every bundle, so
+those nodes are updated by reflashing.
 
 ### 1. Make a release
 

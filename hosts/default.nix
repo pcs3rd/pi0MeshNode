@@ -13,14 +13,15 @@ in
   # Replace "!" (= no password, login disabled) with a hash from:
   #   nix shell nixpkgs#mkpasswd -c mkpasswd
   # The repo is public, so this hash is published - use a long random password.
-  users.users.meshtastic.hashedPassword = "!";
+  users.users.meshtastic.hashedPassword = "$y$j9T$3xUDBb8DidT8e6zMWG3461$ggR8I0sK/icN9mr18vMfcpKWK1RT0rQbrn0n6EDEFr0";
 
   meshnode.sshKeys = [
     # "ssh-ed25519 AAAA... you@workstation"
   ];
 
-  # TEMPORARY: OTA signature checking is off, so nodes accept ANY bundle they're pointed at.
-  # Add a key to keys/ (see keys/README.md) and delete this line before deploying anywhere.
+  # TEMPORARY: signing is off, which disables OTA - these nodes refuse every bundle and can
+  # only be updated by reflashing. Add a key to keys/ (see keys/README.md) and delete this
+  # line to get signed OTA updates.
   meshnode.ota.requireSignature = false;
 
   meshnode.ota.trustedKeys = lib.mapAttrs'

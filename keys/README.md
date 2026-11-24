@@ -48,8 +48,9 @@ git add keys/raine-tkey.pub && git commit -m "Trust OTA signing key raine-tkey"
 ```
 
 `hosts/default.nix` turns every `keys/*.pub` into `meshnode.ota.trustedKeys`. Images refuse to
-build with no trusted keys, unless you set `meshnode.ota.requireSignature = false`, so a fleet
-can't ship that silently accepts anything.
+build with no trusted keys. The one exception is `meshnode.ota.requireSignature = false`, which
+builds an image with **OTA disabled**: its nodes refuse every bundle, signed or not, and can only
+be updated by reflashing. There is no way to build a node that accepts unsigned updates.
 
 ## Sign a bundle
 
