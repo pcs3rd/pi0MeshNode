@@ -59,19 +59,8 @@ in
         type = lib.types.bool;
         default = true;
         description = ''
-          Allow SSH login with the login user's password (users.users.<user>.hashedPassword).
-          Nodes are meant to be reached over Tailscale; see tailnetOnly to close the LAN side.
-        '';
-      };
-      tailnetOnly = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-        description = ''
-          Accept SSH only over Tailscale: port 22 is not opened on Ethernet/Wi-Fi. tailscale0
-          is a trusted interface, and on the Pi 0 (userspace networking) tailscaled hands
-          connections to sshd over loopback, which is always allowed. A node then has to be
-          enrolled with a Tailscale auth key (personalize-image.sh -k); it can't be set up over
-          the LAN. Tailscale SSH (--ssh) bypasses sshd and works either way.
+          Allow SSH login with the login user's password (users.users.<user>.hashedPassword),
+          on every interface. Nodes are expected to sit behind a firewall / NAT appliance.
         '';
       };
     };
@@ -293,7 +282,6 @@ in
         KbdInteractiveAuthentication = false;
         PermitRootLogin = "no";
       };
-      openFirewall = !cfg.ssh.tailnetOnly;
       hostKeys = [{ path = "${stateRoot}/ssh/ssh_host_ed25519_key"; type = "ed25519"; }];
       authorizedKeysFiles = [ "${stateRoot}/meshnode/ssh/authorized_keys" ];
     };

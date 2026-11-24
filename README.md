@@ -98,11 +98,9 @@ The version is `0.1.0+<git short rev>`. It is set in `flake.nix` and baked into 
   `personalize-image.sh -s`.
 - **Tailscale SSH** (`meshnode.tailscale.ssh = true`): `tailscale ssh meshtastic@node-01`,
   authenticated by your tailnet ACLs, with no password or key.
-- **LAN exposure:** by default port 22 is also open on Ethernet/Wi-Fi, so a fresh node can be set
-  up over the LAN. For deployed nodes, set `meshnode.ssh.tailnetOnly = true` to accept SSH only
-  over Tailscale (and enroll them with `-k`). The repo is public, so treat the password hash as
-  public too: use a long random password, and rely on `tailnetOnly` rather than the password to
-  keep strangers out.
+- SSH (password and keys) listens on every interface, LAN and tailnet alike. Nodes are expected
+  to sit behind a firewall or other network appliance. The repo is public, so treat the password
+  hash as public too and use a long random password.
 
 ## Personalize and flash
 
