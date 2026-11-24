@@ -50,6 +50,11 @@ in
         Zero 2), 4 = BCM2711. It picks the vendor defconfig.
       '';
     };
+    usbWifi.ath9kHtc = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Ship ath9k_htc firmware for Atheros AR9271/AR7010 USB Wi-Fi adapters (e.g. Netgear WNA1100). ~100 KB.";
+    };
     hdmi = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -113,8 +118,23 @@ in
     console.enable = cfg.hdmi; # no virtual terminals / gettys on a headless node
 
     nixpkgs.config.allowUnfreePredicate = pkg:
-      builtins.elem (lib.getName pkg) [ "raspberrypi-firmware" "raspberrypi-wireless-firmware" ];
-    hardware.firmware = [ pkgs.raspberrypiWirelessFirmware ]; # brcmfmac only, not all of linux-firmware
+      builtins.elem (lib.getName pkg) [ "raspberrypi-firmware" "raspberrypi-wireless-firmware" "linux-firmware" ];
+    hardware.firmware = [
+      pkgs.raspberrypiWirelessFirmware # onboard brcmfmac (Zero W, Zero 2 W, 3, 4)
+    ] ++ lib.optional cfg.usbWifi.ath9kHtc (
+      # Atheros AR9271 / AR7010 USB adapters (Netgear WNA1100, TP-Link TL-WN722N v1, Alfa
+      # AWUS036NHA...): driver ath9k_htc is =m in every vendor defconfig; it only needs these
+      # files. Copy just them so the image doesn't carry all of linux-firmware.
+      pkgs.runCommand "ath9k-htc-firmware" { } ''
+        mkdir -p $out/lib/firmware
+        cp -r ${pkgs.linux-firmware}/lib/firmware/ath9k_htc $out/lib/firmware/
+        for f in htc_9271.fw htc_7010.fw; do
+          if [ -e ${pkgs.linux-firmware}/lib/firmware/$f ]; then
+            cp -L ${pkgs.linux-firmware}/lib/firmware/$f $out/lib/firmware/
+          fi
+        done
+      ''
+    );
 
     # Contents of one slot_X/ directory. cmdline.base gets " abslot=X" appended when installed.
     system.build.rpiSlot = bp.runCommand "meshnode-rpi-slot" { } ''

@@ -346,6 +346,13 @@ GPS TX goes to Pi RX and vice versa. Swapped TX/RX is the most common reason a G
 nothing. Several I2C sensors can share pins 3/5 as long as their addresses differ (BME
 sensors are 0x76 or 0x77).
 
+**USB Wi-Fi.** Atheros AR9271/AR7010 adapters (Netgear WNA1100, TP-Link TL-WN722N v1, Alfa
+AWUS036NHA) work out of the box: the vendor kernel has `ath9k_htc`, and the image ships its
+firmware (`meshnode.rpi.usbWifi.ath9kHtc`). They join the same networks as onboard Wi-Fi
+(`node/wpa_supplicant.conf`). The Pi Zero has one USB data port, so a USB radio *and* a Wi-Fi
+adapter need a hub, preferably a powered one: an AR9271 can draw a few hundred mA when
+transmitting.
+
 ## Boot time
 
 What's done to keep boot fast, especially on the single-core Pi Zero:
