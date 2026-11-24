@@ -8,6 +8,13 @@ let
   keyFiles = lib.filterAttrs (f: t: t == "regular" && lib.hasSuffix ".pub" f) (builtins.readDir ../keys);
 in
 {
+  # Login user (wheel, passwordless sudo). Console login needs a password; SSH stays key-only.
+  meshnode.user = "meshtastic";
+  # Replace "!" (= no password, login disabled) with a hash from:
+  #   nix shell nixpkgs#mkpasswd -c mkpasswd
+  # The repo is public, so this hash is published - use a long random password.
+  users.users.meshtastic.hashedPassword = "!";
+
   meshnode.sshKeys = [
     # "ssh-ed25519 AAAA... you@workstation"
   ];

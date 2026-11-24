@@ -40,7 +40,7 @@ let
       node.env              NODE_HOSTNAME=<name>
       tailscale-authkey     a Tailscale auth key (tskey-auth-...), used once to enroll
       wpa_supplicant.conf   network={ ssid="..." psk="..." } blocks
-      authorized_keys       extra SSH keys for the `mesh` user
+      authorized_keys       extra SSH keys for the `${config.meshnode.user}` user
 
     Factory reset: create an empty file named FACTORY_RESET in the top level of this
     partition. The next boot wipes /boot/state (Tailscale identity, meshtastic node DB,

@@ -185,7 +185,7 @@ Or copy it to the node and apply it from disk. Put it under `/boot/state`, since
 is small:
 
 ```sh
-rsync -a signed/pi4-<build>/ mesh@node-01:/boot/state/ota-pi4/
+rsync -a signed/pi4-<build>/ meshtastic@node-01:/boot/state/ota-pi4/
 ```
 
 Because bundles are signed, the server and the network don't need to be trusted. A tampered,

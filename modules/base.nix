@@ -45,10 +45,19 @@ in
       default = 0;
       description = "Monotonic build number (the flake sets the commit time). OTA refuses bundles that are not newer.";
     };
+    user = lib.mkOption {
+      type = lib.types.str;
+      default = "meshtastic";
+      description = ''
+        Login user (wheel, passwordless sudo). Set its password with
+        users.users.<name>.hashedPassword. Not the meshtasticd daemon's own user,
+        which is "meshtasticd".
+      '';
+    };
     sshKeys = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
-      description = "Fleet-wide SSH public keys for the `mesh` user (per-node keys can be injected too).";
+      description = "Fleet-wide SSH public keys for the login user (per-node keys can be injected too).";
     };
     rootTmpfsSize = lib.mkOption {
       type = lib.types.str;
@@ -270,7 +279,7 @@ in
       meshnode: no fleet SSH keys (meshnode.sshKeys) and Tailscale SSH is off. The only way in
       will be keys injected per device with scripts/personalize-image.sh -s.
     '';
-    users.users.mesh = {
+    users.users.${cfg.user} = {
       isNormalUser = true;
       extraGroups = [ "wheel" "dialout" ];
       openssh.authorizedKeys.keys = cfg.sshKeys;
