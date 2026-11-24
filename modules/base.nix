@@ -172,12 +172,16 @@ in
       description = "Grow STATE to fill the card";
       wantedBy = [ "multi-user.target" ];
       unitConfig.ConditionPathExists = "!${stateRoot}/meshnode/.grown";
-      path = with pkgs; [ cloud-utils util-linux e2fsprogs gawk gnused coreutils ];
+      # util-linux only: cloud-utils (growpart) drags in qemu-utils, which doesn't build for armv6l.
+      path = with pkgs; [ util-linux e2fsprogs coreutils ];
       serviceConfig.Type = "oneshot";
       script = ''
         src=$(findmnt -no SOURCE ${stateRoot})
         disk=/dev/$(lsblk -ndo PKNAME "$src")
-        growpart "$disk" 4 || true   # exits 1 when already full size
+        # Grow partition 4 to the end of the card (a no-op when it already is), then tell the
+        # kernel about the new size of that one, mounted, partition - what growpart does.
+        echo ", +" | sfdisk --quiet --no-reread --no-tell-kernel -N 4 "$disk"
+        partx --update --nr 4 "$disk"
         resize2fs "$src"
         touch ${stateRoot}/meshnode/.grown
       '';
@@ -223,15 +227,17 @@ in
     xdg.mime.enable = false;
     xdg.sounds.enable = false;
 
-    services.journald.storage = "volatile";
+    services.journald.settings.Journal.Storage = "volatile";
     zramSwap = {
       enable = lib.mkDefault true;
       memoryPercent = lib.mkDefault 50;
     };
 
     # Hardware watchdog: a hung trial slot gets reset, which drops the one-shot tryboot flag.
-    systemd.watchdog.runtimeTime = "15s";
-    systemd.watchdog.rebootTime = "2m";
+    systemd.settings.Manager = {
+      RuntimeWatchdogSec = "15s";
+      RebootWatchdogSec = "2m";
+    };
 
     environment.etc."meshnode-release".text = "${cfg.board} ${cfg.version} build ${toString cfg.buildNumber}\n";
     environment.etc."meshnode-build".text = "${toString cfg.buildNumber}\n";

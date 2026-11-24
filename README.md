@@ -378,7 +378,7 @@ This template was written without a Nix evaluator, so expect a few fix-up rounds
 `nix build`. Check these first:
 
 - [ ] `nix flake check` / eval of each `nixosConfigurations.<board>` (option names drift between
-      nixpkgs releases, e.g. `systemd.watchdog.*`, `networking.wireless.*`)
+      nixpkgs releases, e.g. `networking.wireless.*`)
 - [ ] bind mounts with `neededForBoot` resolve under `/sysroot` in the systemd initrd, and
       `meshnode-state-dirs` runs before them
 - [ ] the udev `IMPORT{cmdline}="abslot"` + `ID_PART_ENTRY_UUID` rule creates
