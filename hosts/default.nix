@@ -14,7 +14,7 @@ in
   # Replace "!" (= no password, login disabled) with a hash from:
   #   nix shell nixpkgs#mkpasswd -c mkpasswd
   # The repo is public, so this hash is published - use a long random password.
-  users.users.meshtastic.hashedPassword = "$y$j9T$3xUDBb8DidT8e6zMWG3461$ggR8I0sK/icN9mr18vMfcpKWK1RT0rQbrn0n6EDEFr0";
+  users.users.meshtastic.hashedPassword = "$y$j9T$6/QpBaekmL2XG4NUJRdHY0$SHm/vCefXXVoz5Sfp/HUNEIELPMs8B25ocgcXeWYyk/";
 
   meshnode.sshKeys = [
     # "ssh-ed25519 AAAA... you@workstation"
