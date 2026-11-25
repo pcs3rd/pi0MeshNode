@@ -99,17 +99,18 @@ in
       };
       device = lib.mkOption {
         type = lib.types.str;
-        default = "/dev/ttyAMA0";
+        default = "/dev/serial0";
         description = ''
-          Serial device for the GPS. With disableBluetooth (default) the full UART is on pins
-          8/10 on every board, so it is /dev/ttyAMA0 everywhere. Without it, boards with
-          Bluetooth (Zero W, Zero 2 W, 3, 4) have the mini UART there: /dev/ttyS0.
+          Serial device for the GPS. /dev/serial0 (a udev link set up in rpi-boot.nix) always
+          points at the UART on pins 8/10, whichever one the firmware put there: the full
+          PL011 (ttyAMA*) with disableBluetooth or on boards without Bluetooth, otherwise the
+          mini UART (ttyS0), which is fine for NMEA at 9600-115200 baud.
         '';
       };
       disableBluetooth = lib.mkOption {
         type = lib.types.bool;
         default = true;
-        description = "Add dtoverlay=disable-bt so the full PL011 UART (ttyAMA0) is on the header. Wi-Fi is unaffected.";
+        description = "Add dtoverlay=disable-bt so the full PL011 UART, not the mini UART, is on the header (/dev/serial0). Wi-Fi is unaffected.";
       };
       ppsGpio = lib.mkOption {
         type = lib.types.nullOr lib.types.ints.unsigned;
@@ -243,7 +244,7 @@ in
 
     (lib.mkIf (cfg.gps.enable && cfg.gps.mode == "serial") {
       services.meshtasticd.settings.GPS.SerialPath = lib.mkDefault cfg.gps.device;
-      users.users.${svc.user}.extraGroups = [ "dialout" ]; # /dev/ttyAMA0 is root:dialout 0660
+      users.users.${svc.user}.extraGroups = [ "dialout" ]; # header UARTs are root:dialout 0660 (rpi-boot.nix udev rule)
     })
 
     (lib.mkIf (cfg.gps.enable && cfg.gps.mode == "gpsd") {

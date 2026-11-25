@@ -98,8 +98,33 @@ in
       (final: prev: { makeModulesClosure = x: prev.makeModulesClosure (x // { allowMissing = true; }); })
     ];
 
-    boot.kernelParams = lib.optional cfg.serialConsole "console=serial0,115200"
-      ++ lib.optional cfg.hdmi "console=tty1";
+    # Always name a console. With no console= at all the kernel falls back to the firmware's
+    # stdout-path - the header UART - and systemd then runs a serial getty on the GPS pins.
+    # tty1 exists even with HDMI off and no gettys (console.enable = false), so it's a sink.
+    # The last console= becomes /dev/console.
+    boot.kernelParams = lib.optional cfg.serialConsole "console=serial0,115200" ++ [ "console=tty1" ];
+
+    # /dev/serial0 and /dev/serial1 as on Raspberry Pi OS: serial0 is whichever UART the
+    # firmware routed to GPIO14/15 (pins 8/10) - the full PL011 (ttyAMA*) with
+    # dtoverlay=disable-bt or on boards without Bluetooth, else the mini UART (ttyS0).
+    # Matches the tty's device-tree node against /proc/device-tree/aliases/serialN.
+    services.udev.extraRules =
+      let
+        alias = pkgs.writeShellScript "rpi-serial-alias" ''
+          node=$(${pkgs.coreutils}/bin/readlink -f "/sys/class/tty/$1/device/of_node") || exit 1
+          node=''${node#/sys/firmware/devicetree/base}
+          for i in 0 1; do
+            a=/proc/device-tree/aliases/serial$i
+            if [ -e "$a" ] && [ "$(${pkgs.coreutils}/bin/tr -d '\000' < "$a")" = "$node" ]; then
+              echo "$i"; exit 0
+            fi
+          done
+          exit 1
+        '';
+      in
+      ''
+        KERNEL=="ttyAMA[0-9]*|ttyS[0-9]*", PROGRAM="${alias} %k", SYMLINK+="serial%c", GROUP="dialout", MODE="0660"
+      '';
     console.enable = cfg.hdmi; # no virtual terminals / gettys on a headless node
 
     nixpkgs.config.allowUnfreePredicate = pkg:

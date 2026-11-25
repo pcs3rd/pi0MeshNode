@@ -341,16 +341,18 @@ and use `https://<node>.<tailnet>.ts.net`; this needs HTTPS certificates enabled
   gpsd and chrony add some RAM and closure, which matters on a Zero.
 
 Enabling GPS takes the kernel console and serial login off pins 8/10, since they share them
-(`meshnode.rpi.serialConsole`). HDMI is off by default too (`meshnode.rpi.hdmi = false`):
-the firmware keeps the HDMI output powered down, about 25 mA saved on a Zero, and there are no
-virtual terminals. With both off, a node is reachable only over the network (SSH or Tailscale
-SSH), so make sure a key is in place before deploying one somewhere awkward. Set
-`meshnode.rpi.hdmi = true` on a bench node. It also adds `dtoverlay=disable-bt`, so the full UART is on
-the header and the device is `/dev/ttyAMA0` on every board. Without that, Bluetooth boards
-(Zero W, Zero 2 W, 3, 4) put the weaker mini UART (`/dev/ttyS0`) there. Wi-Fi is unaffected.
-Turn it off with `meshnode.meshtastic.gps.disableBluetooth = false` and set
-`gps.device = "/dev/ttyS0"`. meshtasticd probes the module's baud rate itself. If it never
-gets a fix, check the raw output with `stty -F /dev/ttyAMA0 9600 && cat /dev/ttyAMA0` (try
+(`meshnode.rpi.serialConsole`). The kernel console always goes to `tty1` instead; with no
+`console=` at all, the kernel would fall back to the header UART. HDMI is off by default too
+(`meshnode.rpi.hdmi = false`): the firmware keeps the HDMI output powered down, about 25 mA saved
+on a Zero, and there are no virtual terminals. With both off, a node is reachable only over the
+network (SSH or Tailscale SSH). Set `meshnode.rpi.hdmi = true` on a bench node.
+
+The GPS is read from `/dev/serial0`. As on Raspberry Pi OS, a udev rule links that to whichever
+UART the firmware routed to pins 8/10. The image also adds `dtoverlay=disable-bt`
+(`gps.disableBluetooth`), which should put the full PL011 UART there instead of the weaker mini
+UART on Bluetooth boards (Zero W, Zero 2 W, 3, 4). Either UART works for NMEA. Wi-Fi is
+unaffected. meshtasticd probes the module's baud rate itself. If it never
+gets a fix, check the raw output with `stty -F /dev/serial0 9600 && cat /dev/serial0` (try
 115200 too): readable `$GN…`/`$GP…` sentences mean the wiring is right. Disable GPS with
 `meshnode.meshtastic.gps.enable = false`.
 
@@ -501,7 +503,8 @@ This template was written without a Nix evaluator, so expect a few fix-up rounds
 - [ ] `lib.trim` exists in your nixpkgs (used by `modules/ota.nix` to normalise keys)
 - [ ] meshtasticd reaches the MeshStick as its own user (udev rule + libusb), and
       `services.meshtasticd.user`/`group` exist under those option names
-- [ ] `dtoverlay=disable-bt` puts the PL011 (`ttyAMA0`) on GPIO14/15 on every board, and
+- [ ] `dtoverlay=disable-bt` takes effect (on a Zero W it didn't: `ttyAMA1` stayed bound to
+      Bluetooth); the GPS works regardless via `/dev/serial0`, and
       the packaged meshtasticd version reads `GPS.SerialPath` / `GPS.GpsdHost`
 - [ ] gpsd + chrony SHM/PPS refclocks lock (`chronyc sources`), and the closure cost on pi0
 - [ ] imperative Wi-Fi path (`/etc/wpa_supplicant/imperative.conf` vs `/etc/wpa_supplicant.conf`)
