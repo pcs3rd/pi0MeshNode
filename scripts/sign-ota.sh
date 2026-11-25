@@ -4,10 +4,13 @@
 #   nix build .#packages.aarch64-linux.pi4-ota -o ota-pi4
 #   scripts/sign-ota.sh -k ~/.ssh/meshnode-ota ota-pi4           # plain key file
 #   scripts/sign-ota.sh -k keys/raine-tkey.pub ota-pi4           # key held in ssh-agent (TKey, YubiKey, 1Password...)
+#   scripts/sign-ota.sh -k ~/.ssh/meshnode-ota -K ../fleet/keys ota-pi4   # keys trusted by a private fleet repo
 #
 # Copies the bundle out of the (read-only) Nix store into signed/<board>-<build>/, writes
 # manifest.json.sig with `ssh-keygen -Y sign -n meshnode-ota`, then checks the signature
 # against keys/*.pub - the same keys the images trust - so you find out here, not on a node.
+# A private fleet flake that sets its own trustedKeys passes its keys directory with -K
+# (or MESHNODE_KEYS_DIR) and its output root with MESHNODE_SIGNED_DIR.
 # Needs: ssh-keygen (OpenSSH >= 8.2), jq.
 set -euo pipefail
 
@@ -17,18 +20,23 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 die() { echo "sign-ota: $*" >&2; exit 1; }
 usage() {
   cat >&2 <<USAGE
-usage: $0 -k <key> [-o <outdir>] <bundle-dir>
+usage: $0 -k <key> [-K <keys-dir>] [-o <outdir>] <bundle-dir>
   -k  signing key: a private key file, an sk- key handle (YubiKey/FIDO), or a .pub
       whose private half is loaded in ssh-agent (e.g. tkey-ssh-agent for a Tillitis TKey)
-  -o  output directory (default: signed/<board>-<build>)
+  -K  directory of trusted *.pub keys to self-check against
+      (default: \$MESHNODE_KEYS_DIR, else this repo's keys/)
+  -o  output directory (default: \$MESHNODE_SIGNED_DIR/<board>-<build>, else signed/<board>-<build>)
 USAGE
   exit 2
 }
 
 key="" out=""
-while getopts "k:o:h" opt; do
+keysdir=${MESHNODE_KEYS_DIR:-$repo/keys}
+signeddir=${MESHNODE_SIGNED_DIR:-$repo/signed}
+while getopts "k:K:o:h" opt; do
   case "$opt" in
     k) key=$OPTARG ;;
+    K) keysdir=$OPTARG ;;
     o) out=$OPTARG ;;
     *) usage ;;
   esac
@@ -39,11 +47,12 @@ bundle=${1%/}
 for t in ssh-keygen jq; do command -v "$t" > /dev/null || die "missing $t (try: nix develop)"; done
 [ -f "$bundle/manifest.json" ] || die "$bundle/manifest.json not found - is this an OTA bundle (nix build .#<board>-ota)?"
 [ -e "$key" ] || die "key $key not found"
+[ -d "$keysdir" ] || die "keys directory $keysdir not found"
 
 board=$(jq -r .board "$bundle/manifest.json")
 build=$(jq -r .build "$bundle/manifest.json")
 version=$(jq -r .version "$bundle/manifest.json")
-out=${out:-$repo/signed/$board-$build}
+out=${out:-$signeddir/$board-$build}
 
 mkdir -p "$out"
 for f in manifest.json "$(jq -r .slotfs.file "$bundle/manifest.json")" "$(jq -r .boot.file "$bundle/manifest.json")"; do
@@ -59,19 +68,19 @@ ssh-keygen -Y sign -q -f "$key" -n "$NAMESPACE" "$out/manifest.json"
 # Self-check against the keys the images trust.
 allowed=$(mktemp)
 trap 'rm -f "$allowed"' EXIT
-for f in "$repo"/keys/*.pub; do
+for f in "$keysdir"/*.pub; do
   [ -e "$f" ] || continue
   printf '%s namespaces="%s" %s\n' "$(basename "$f" .pub)" "$NAMESPACE" "$(awk 'NF { print $1, $2; exit }' "$f")"
 done > "$allowed"
 
 if [ ! -s "$allowed" ]; then
-  echo "warning: no keys/*.pub in the repo, so images trust no signer yet - skipped self-check" >&2
+  echo "warning: no *.pub in $keysdir, so images trust no signer yet - skipped self-check" >&2
 else
   signer=$(ssh-keygen -Y find-principals -f "$allowed" -s "$out/manifest.json.sig" 2>/dev/null | head -n1) \
-    || die "signed, but the key is not in keys/ - nodes will reject this bundle"
+    || die "signed, but the key is not in $keysdir - nodes will reject this bundle"
   ssh-keygen -Y verify -q -f "$allowed" -I "$signer" -n "$NAMESPACE" -s "$out/manifest.json.sig" \
     < "$out/manifest.json" > /dev/null || die "signature failed self-check"
-  echo "verified: signer '$signer' is trusted by images built from keys/" >&2
+  echo "verified: signer '$signer' is trusted by images built from $keysdir" >&2
 fi
 
 echo "$out"

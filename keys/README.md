@@ -94,3 +94,19 @@ replay an older, validly signed release with known bugs. A failed trial doesn't 
 so you can retry a fixed build. To reinstall or deliberately downgrade, pass
 `meshnode-ota update <bundle> --allow-downgrade`. A factory reset clears the recorded floor
 (the running build still applies).
+
+## Keeping keys and fleet settings in a private repo
+
+This repo is a public builder. To keep your trusted keys, password hash and other fleet settings
+out of it, use a small private flake that takes this repo as an input and adds a module through
+`lib.mkNode { extraModules = [ ... ]; }`. That flake:
+
+- sets `meshnode.ota.trustedKeys` from its own `keys/*.pub` and forces
+  `meshnode.ota.requireSignature = true` (overriding the temporary `false` here);
+- sets `meshnode.buildNumber` to the newer of the two repos' commit times, so a commit to either
+  repo produces a bundle nodes accept as newer;
+- signs with `MESHNODE_KEYS_DIR=<fleet>/keys scripts/sign-ota.sh ...` (or `-K <fleet>/keys`), so
+  the self-check runs against the keys its images actually trust.
+
+Keys left in this repo's `keys/` are still trusted (the attrsets merge), so keep it empty when a
+fleet repo owns the keys. Private keys stay out of both repos.
