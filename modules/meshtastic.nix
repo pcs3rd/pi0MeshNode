@@ -178,6 +178,10 @@ in
     })
 
     (lib.mkIf usbRadio {
+      # The in-kernel CH341 SPI driver would claim 1a86:5512 first; meshtasticd's libpinedio
+      # then has to detach it on every start ("ignoring udev action unbind"). Nothing here
+      # uses it, so keep it from binding at all.
+      boot.blacklistedKernelModules = [ "spi_ch341" ];
       # meshtasticd talks to the CH341 (real or emulated) through libusb, as its own user.
       services.udev.extraRules = ''
         SUBSYSTEM=="usb", ATTR{idVendor}=="1a86", ATTR{idProduct}=="5512", MODE="0660", GROUP="${svc.group}"
