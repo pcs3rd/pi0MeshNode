@@ -157,6 +157,14 @@ in
       services.udev.packages = [ svc.package ];
       systemd.tmpfiles.rules = [ "d /boot/state/meshtasticd/config.d 0755 root root -" ];
 
+      # At boot meshtasticd raced udev: the USB radio's node wasn't yet group-writable
+      # ("libusb ... errno=13", two failed starts) and the I2C bus came up empty ("No I2C
+      # devices found"). Wait for the coldplug queue to drain first (capped, never fatal).
+      systemd.services.meshtasticd = {
+        after = [ "systemd-udev-trigger.service" ];
+        serviceConfig.ExecStartPre = [ "-${config.systemd.package}/bin/udevadm settle --timeout=20" ];
+      };
+
       meshnode.state.directories = [ svc.dataDir ];
       meshnode.ota.healthUnits = [ "meshtasticd.service" ];
     }
