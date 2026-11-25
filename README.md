@@ -104,30 +104,120 @@ The version is `0.1.0+<git short rev>`. It is set in `flake.nix` and baked into 
 
 ## Personalize and flash
 
-Device-specific data and secrets are written onto the FAT partition of the *built* image, so none
-of it enters the Nix store or a binary cache:
+A built image is generic: every card flashed from it is identical. Per-device settings and secrets
+(hostname, Tailscale auth key, Wi-Fi, extra SSH keys) are added to the card's FIRMWARE (FAT)
+partition **after** the build, in a `node/` folder. They never enter the Nix store, a binary cache,
+the repo or an OTA bundle.
+
+Every file is optional. A card with none of them boots with the default hostname, uses Ethernet
+only and stays off the tailnet until you enroll it by hand (see below).
+
+| File in `node/` | Script flag | What it does |
+| --- | --- | --- |
+| `node.env` | `-n <hostname>` (required) | `NODE_HOSTNAME=<name>` sets the hostname (and the Tailscale machine name) |
+| `tailscale-authkey` | `-k <file>` | a `tskey-auth-...` key on one line. Enrolls the node on first boot |
+| `wpa_supplicant.conf` | `-w <file>` | Wi-Fi networks (below) |
+| `authorized_keys` | `-s <file>` | extra SSH public keys for the `meshtastic` user |
+
+### 1. Get a Tailscale auth key
+
+In the Tailscale admin console: **Settings → Keys → Generate auth key**.
+
+- **Pre-approved:** on, if your tailnet requires device approval.
+- **Tags:** e.g. `tag:meshnode` (define it in your ACL `tagOwners` first). A tagged node has
+  no owner key expiry, so it doesn't drop off the tailnet after 180 days.
+- **Reusable:** off for one node; on (with a short expiration) to enroll a batch with one key.
+- **Ephemeral:** off, so the node keeps its tailnet identity.
+
+Save the key in a file outside the repo, with nothing else in it:
 
 ```sh
-nix develop   # zstd + mtools
+mkdir -p ~/secrets && chmod 700 ~/secrets
+printf '%s\n' 'tskey-auth-XXXXXXXX-YYYYYYYYYYYY' > ~/secrets/tskey-node-01
+chmod 600 ~/secrets/tskey-node-01
+```
+
+Tailscale SSH (`--ssh`) is already turned on by `meshnode.tailscale.ssh` in `hosts/default.nix`.
+Tags and approval come from the key, so no per-device flags are needed. Fleet-wide `tailscale up`
+flags go in `meshnode.tailscale.extraUpFlags`.
+
+### 2a. Add it to the image before flashing (scriptable)
+
+```sh
+nix develop      # provides zstd + mtools (also on macOS)
 scripts/personalize-image.sh \
-  -i result/meshnode-pi0-*.img.zst -o node-01.img -n node-01 \
+  -i pi0-image/meshnode-pi0-*.img.zst \
+  -o node-01.img \
+  -n node-01 \
   -k ~/secrets/tskey-node-01 \
   -w ~/secrets/wifi.conf \
   -s ~/secrets/extra_authorized_keys
-sudo dd if=node-01.img of=/dev/<card> bs=4M conv=fsync status=progress
+```
+
+`-i` is the `.img.zst` inside the `nix build` output link (`result/` if you didn't pass `-o`).
+The script unpacks it to `node-01.img` and copies the files into `node/`. The image itself is not
+modified. Flash `node-01.img` with balenaEtcher, Raspberry Pi Imager ("Use custom"), or `dd`, then
+**delete `node-01.img`: it contains the key.**
+
+```sh
+sudo dd if=node-01.img of=/dev/<card> bs=4M conv=fsync status=progress   # Linux; /dev/rdiskN on macOS
 rm node-01.img
 ```
 
-`wifi.conf` holds plain `network={ ssid="..." psk="..." }` blocks.
+### 2b. Or add it to an already-flashed card
 
-On first boot `meshnode-node-config.service` moves `node/*` into `/boot/state/meshnode/node` and
-deletes the copies on FAT. It then sets the hostname. nixpkgs' `tailscaled-autoconnect` runs
-`tailscale up --auth-key=file:…`, and `meshnode-tailscale-key-cleanup` shreds the key once the
-backend reports `Running`.
+Flash the plain image (Etcher can take the `.img.zst` directly), then re-insert the card. Its first
+partition mounts as **FIRMWARE** on macOS, Windows and Linux. Before the card's first boot, put the
+files in its `node/` folder (a `README.txt` there lists them):
 
-**Auth key advice:** make it pre-approved and tagged (e.g. `tag:meshnode`), single-use for one
-device or reusable with a short expiry for a batch. Tags and approval come from the key, so no
-per-device flags are needed.
+```sh
+cp ~/secrets/tskey-node-01 /Volumes/FIRMWARE/node/tailscale-authkey   # macOS
+echo NODE_HOSTNAME=node-01 > /Volumes/FIRMWARE/node/node.env
+cp ~/secrets/wifi.conf     /Volumes/FIRMWARE/node/wpa_supplicant.conf   # optional
+diskutil eject /Volumes/FIRMWARE
+```
+
+The file names must match exactly. Leave out `.txt` extensions: in TextEdit, use Format → Make
+Plain Text and untick "If no extension is provided, use .txt".
+
+### Wi-Fi file
+
+```
+country=US
+network={
+    ssid="MyNetwork"
+    psk="password"
+}
+network={
+    ssid="Backup"
+    psk="password2"
+}
+```
+
+`wpa_passphrase "MyNetwork" "password"` prints a block with a hashed `psk=` if you'd rather not keep
+the plain password. The Pi Zero W only sees 2.4 GHz networks.
+
+### What happens on first boot
+
+1. `meshnode-node-config` moves `node/*` to `/boot/state/meshnode/node` (mode 0600) and deletes the
+   copies on FAT, then sets the hostname and installs the Wi-Fi networks.
+2. nixpkgs' `tailscaled-autoconnect` runs `tailscale up --auth-key=file:…`.
+3. Once the backend reports `Running`, `meshnode-tailscale-key-cleanup` shreds the key. The node's
+   tailnet identity stays in `/boot/state/tailscale`, so reboots and OTA updates keep it.
+
+A **factory reset** wipes that identity: add a fresh key to `node/` (2b) before the next boot.
+Expired or already-used keys fail quietly. Check with `journalctl -u tailscaled-autoconnect -b`.
+
+### Enroll by hand instead
+
+With no key on the card, SSH in over Ethernet or Wi-Fi as `meshtastic` and run:
+
+```sh
+sudo tailscale up --ssh                      # prints a login URL to open in a browser
+sudo tailscale up --ssh --auth-key=tskey-auth-...   # or with a key
+```
+
+The identity persists in `/boot/state` the same way.
 
 ## OTA updates (A/B)
 
