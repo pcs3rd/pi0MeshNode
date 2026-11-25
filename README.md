@@ -314,6 +314,14 @@ sensors on it (temperature/humidity/pressure and similar). The image sets `dtpar
 loads `i2c-dev`, and adds meshtasticd's user to the `i2c` group. Change the bus with
 `meshnode.meshtastic.i2c.device`, or turn it off with `meshnode.meshtastic.i2c.enable = false`.
 
+**Web client** (`meshnode.meshtastic.web`, on by default): meshtasticd serves the Meshtastic web
+app over HTTPS on port 9443. It and the 4403 API are reachable **only over Tailscale**: the
+firewall trusts `tailscale0` and doesn't open either port on Ethernet or Wi-Fi. Browse to
+`https://<node's tailnet IP or MagicDNS name>:9443`. The certificate is self-signed (generated on
+first start and kept in `/boot/state`), so expect one browser warning per node. For a trusted
+certificate instead, run `sudo tailscale serve --bg https+insecure://localhost:9443` on the node
+and use `https://<node>.<tailnet>.ts.net`; this needs HTTPS certificates enabled for your tailnet.
+
 **GPS** (any 3.3 V UART GPS, such as an HGLRC M100 Mini) on the header UART is enabled by default:
 
 - **`mode = "serial"`** (default): meshtasticd reads the module directly (`GPS.SerialPath`).

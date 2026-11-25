@@ -74,6 +74,18 @@ in
         any attached T114 (matched by its USB product string), whatever the radio preset.
       '';
     };
+    web = {
+      enable = lib.mkEnableOption "the Meshtastic web client served by meshtasticd (HTTPS)" // { default = true; };
+      port = lib.mkOption {
+        type = lib.types.port;
+        default = 9443;
+        description = ''
+          HTTPS port of the web client. Like the 4403 API it is reachable only over Tailscale:
+          the firewall trusts tailscale0 (and loopback, which the Pi 0's userspace tailscaled
+          uses) and doesn't open either port on Ethernet/Wi-Fi.
+        '';
+      };
+    };
     gps = {
       enable = lib.mkEnableOption "a serial GPS on the header UART (GPIO14 TXD / GPIO15 RXD)" // { default = true; };
       mode = lib.mkOption {
@@ -179,6 +191,21 @@ in
       services.udev.extraRules = ''
         ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1a86", ATTR{idProduct}=="5512", ATTR{product}=="*T114*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="meshnode-t114-leds.service"
       '';
+    })
+
+    (lib.mkIf cfg.web.enable {
+      services.meshtasticd.settings.Webserver = {
+        Port = lib.mkDefault cfg.web.port;
+        # Static files, architecture-independent: take the build machine's copy so the Pi 0
+        # cross build doesn't have to cross-build a pnpm/vite project.
+        RootPath = lib.mkDefault "${pkgs.buildPackages.meshtastic-web}";
+        # meshtasticd generates a self-signed cert if these don't exist. Keep it on STATE (its
+        # dataDir is persisted) instead of the tmpfs /etc, so it survives reboots and OTAs.
+        SSLKey = lib.mkDefault "${svc.dataDir}/ssl/private_key.pem";
+        SSLCert = lib.mkDefault "${svc.dataDir}/ssl/certificate.pem";
+      };
+      systemd.tmpfiles.rules = [ "d ${svc.dataDir}/ssl 0700 ${svc.user} ${svc.group} -" ];
+      # No firewall opening on purpose: tailnet-only (see the web.port description).
     })
 
     (lib.mkIf cfg.gps.enable {
