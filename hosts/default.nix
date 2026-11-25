@@ -32,7 +32,9 @@ in
   meshnode.tailscale.ssh = true;
   # meshnode.tailscale.extraUpFlags = [ "--advertise-tags=tag:meshnode" ];
 
-  # Radio: Elecrow MeshStick by default (modules/meshtastic.nix). Other hardware:
+  # Radio: this fleet uses Heltec T114s running the t114-ch341 bridge firmware. The module's
+  # default is the Elecrow MeshStick ("meshstick-1262"). Other hardware:
+  meshnode.meshtastic.radio = "t114-ch341";
   #   meshnode.meshtastic.radio = "custom";
   #   services.meshtasticd.settings.Lora = { ... };  # from meshtastic/firmware bin/config.d/
   # Several sticks on one node? Pin one: meshnode.meshtastic.usbSerial = "12345678";
