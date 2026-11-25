@@ -314,6 +314,12 @@ sensors on it (temperature/humidity/pressure and similar). The image sets `dtpar
 loads `i2c-dev`, and adds meshtasticd's user to the `i2c` group. Change the bus with
 `meshnode.meshtastic.i2c.device`, or turn it off with `meshnode.meshtastic.i2c.enable = false`.
 
+**On-node overrides without a rebuild:** meshtasticd also reads every `*.yaml` in
+`/boot/state/meshtasticd/config.d/` (`General.ConfigDirectory`). That directory is on the state
+partition, so files there survive reboots and OTAs; a factory reset clears them. Restart
+meshtasticd after adding one. The startup log lists each file it picks up as `Also using "…" as
+additional config file`. Values in those files override the image's config.
+
 **Web client** (`meshnode.meshtastic.web`, on by default): meshtasticd serves the Meshtastic web
 app over HTTPS on port 9443. It and the 4403 API are reachable **only over Tailscale**: the
 firewall trusts `tailscale0` and doesn't open either port on Ethernet or Wi-Fi. Browse to

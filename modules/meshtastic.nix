@@ -140,10 +140,15 @@ in
           General = {
             MaxNodes = lib.mkDefault 200;
             MaxMessageQueue = lib.mkDefault 100;
+            # meshtasticd only reads drop-in YAML files when ConfigDirectory is set (upstream's
+            # config-dist.yaml sets it; the NixOS module's generated config doesn't). Point it
+            # at STATE so on-node overrides work without a rebuild *and* survive reboots/OTAs.
+            ConfigDirectory = lib.mkDefault "/boot/state/meshtasticd/config.d/";
           };
         };
       };
       services.udev.packages = [ svc.package ];
+      systemd.tmpfiles.rules = [ "d /boot/state/meshtasticd/config.d 0755 root root -" ];
 
       meshnode.state.directories = [ svc.dataDir ];
       meshnode.ota.healthUnits = [ "meshtasticd.service" ];
