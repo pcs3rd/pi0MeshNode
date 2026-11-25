@@ -45,9 +45,20 @@ let
 
   usbRadio = cfg.radio == "meshstick-1262" || cfg.radio == "t114-ch341";
 
-  webRoot = pkgs.buildPackages.runCommand "meshtastic-web-plain" { } ''
-    cp -r ${pkgs.buildPackages.meshtastic-web} $out
+  # Official prebuilt web client release. nixpkgs' meshtastic-web (2.6.7) is older than
+  # meshtasticd 2.8.1, and its LoRa settings page saves a config with use_preset = false and
+  # zeroed bandwidth / spread factor / coding rate, which the SX1262 rejects (RadioLib -706)
+  # and meshtasticd then crashes recovering from. The release tarball also needs no JS build.
+  webVersion = "2.7.2";
+  webTarball = pkgs.buildPackages.fetchurl {
+    url = "https://github.com/meshtastic/web/releases/download/v${webVersion}/build.tar";
+    hash = "sha256-YmV7hbTCSvTUTaKTK2QUOr2/bmWnn8tR/QgB2VQGFuI=";
+  };
+  webRoot = pkgs.buildPackages.runCommand "meshtastic-web-${webVersion}" { } ''
+    mkdir $out
+    tar -xf ${webTarball} -C $out --no-same-owner
     chmod -R u+w $out
+    # The release ships only pre-gzipped files; meshtasticd serves plain files.
     find $out -name '*.gz' -exec ${pkgs.buildPackages.gzip}/bin/gunzip -f {} +
   '';
   t114ctl = pkgs.callPackage ../pkgs/t114ctl.nix { };
@@ -220,10 +231,7 @@ in
     (lib.mkIf cfg.web.enable {
       services.meshtasticd.settings.Webserver = {
         Port = lib.mkDefault cfg.web.port;
-        # Static files, architecture-independent: take the build machine's copy so the Pi 0
-        # cross build doesn't have to cross-build a pnpm/vite project. The web build ships
-        # pre-gzipped files (index.html.gz, ...) but meshtasticd only serves plain files
-        # ("file not found" otherwise), so decompress them.
+        # Official web client release, decompressed (see webRoot above).
         RootPath = lib.mkDefault "${webRoot}";
         # Self-signed cert on STATE (meshtasticd's dataDir is persisted), not the tmpfs /etc.
         SSLKey = lib.mkDefault "${svc.dataDir}/ssl/private_key.pem";
