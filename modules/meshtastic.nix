@@ -44,6 +44,12 @@ let
   } // lib.optionalAttrs (cfg.usbSerial != null) { USB_Serialnum = cfg.usbSerial; };
 
   usbRadio = cfg.radio == "meshstick-1262" || cfg.radio == "t114-ch341";
+
+  webRoot = pkgs.buildPackages.runCommand "meshtastic-web-plain" { } ''
+    cp -r ${pkgs.buildPackages.meshtastic-web} $out
+    chmod -R u+w $out
+    find $out -name '*.gz' -exec ${pkgs.buildPackages.gzip}/bin/gunzip -f {} +
+  '';
   t114ctl = pkgs.callPackage ../pkgs/t114ctl.nix { };
   ledTimeout = cfg.t114.ledsOffAfterBoot;
 in
@@ -203,8 +209,10 @@ in
       services.meshtasticd.settings.Webserver = {
         Port = lib.mkDefault cfg.web.port;
         # Static files, architecture-independent: take the build machine's copy so the Pi 0
-        # cross build doesn't have to cross-build a pnpm/vite project.
-        RootPath = lib.mkDefault "${pkgs.buildPackages.meshtastic-web}";
+        # cross build doesn't have to cross-build a pnpm/vite project. The web build ships
+        # pre-gzipped files (index.html.gz, ...) but meshtasticd only serves plain files
+        # ("file not found" otherwise), so decompress them.
+        RootPath = lib.mkDefault "${webRoot}";
         # Self-signed cert on STATE (meshtasticd's dataDir is persisted), not the tmpfs /etc.
         SSLKey = lib.mkDefault "${svc.dataDir}/ssl/private_key.pem";
         SSLCert = lib.mkDefault "${svc.dataDir}/ssl/certificate.pem";
