@@ -295,7 +295,11 @@ Or copy it to the node and apply it from disk. Put it under `/boot/state`, since
 is small:
 
 ```sh
-rsync -a signed/pi4-<build>/ meshtastic@node-01:/boot/state/ota-pi4/
+# /boot/state is root-owned and the image has no rsync, so stream each file through sudo tee
+ssh meshtastic@node-01 sudo mkdir -p /boot/state/ota-pi4
+for f in manifest.json manifest.json.sig slotfs.img.zst boot.tar.zst; do
+  ssh meshtastic@node-01 "sudo tee /boot/state/ota-pi4/$f >/dev/null" < signed/pi4-<build>/$f
+done
 ```
 
 Because bundles are signed, the server and the network don't need to be trusted. A tampered,
