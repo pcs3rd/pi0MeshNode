@@ -6,3 +6,4 @@ secrets/
 signed/
 ota-*
 layout.env
+pi0-image/
