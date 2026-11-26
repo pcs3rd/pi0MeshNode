@@ -83,7 +83,7 @@ in
     };
     t114.ledsOffAfterBoot = lib.mkOption {
       type = lib.types.nullOr lib.types.ints.unsigned;
-      default = 30;
+      default = 120;
       description = ''
         Turn a T114 bridge's status LEDs off once the node has been up this many seconds; a
         bridge plugged in later goes dark straight away. null leaves the LEDs on. The firmware
@@ -209,6 +209,8 @@ in
         description = "Turn off T114 radio status LEDs after boot";
         serviceConfig = {
           Type = "oneshot";
+          # Sleeps up to ledsOffAfterBoot seconds; don't rely on oneshot's default (no) timeout.
+          TimeoutStartSec = ledTimeout + 60;
           ExecStart = pkgs.writeShellScript "meshnode-t114-leds" ''
             up=$(${pkgs.coreutils}/bin/cut -d. -f1 /proc/uptime)
             if [ "$up" -lt ${toString ledTimeout} ]; then
