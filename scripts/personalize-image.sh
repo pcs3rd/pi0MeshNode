@@ -2,7 +2,7 @@
 # Personalize a built meshnode image for one device - secrets never enter the Nix store.
 #
 #   scripts/personalize-image.sh -i result/meshnode-pi0-*.img.zst -o node-01.img -n node-01 \
-#       -k ~/secrets/tskey-node-01 -w ~/secrets/wifi.conf [-s extra_authorized_keys]
+#       -k secrets/tskey-node-01 -w secrets/wifi.conf [-s extra_authorized_keys]
 #
 # Needs: zstd, mtools (`nix develop` provides both). Works on Linux and macOS, no root.
 set -euo pipefail

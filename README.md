@@ -129,13 +129,18 @@ In the Tailscale admin console: **Settings → Keys → Generate auth key**.
 - **Reusable:** off for one node; on (with a short expiration) to enroll a batch with one key.
 - **Ephemeral:** off, so the node keeps its tailnet identity.
 
-Save the key in a file outside the repo, with nothing else in it:
+Save the key in `secrets/` at the repo root, with nothing else in the file. `.gitignore` excludes
+`secrets/`, and flakes only copy git-tracked files into the Nix store, so it stays out of both:
 
 ```sh
-mkdir -p ~/secrets && chmod 700 ~/secrets
-printf '%s\n' 'tskey-auth-XXXXXXXX-YYYYYYYYYYYY' > ~/secrets/tskey-node-01
-chmod 600 ~/secrets/tskey-node-01
+mkdir -p secrets && chmod 700 secrets
+printf '%s\n' 'tskey-auth-XXXXXXXX-YYYYYYYYYYYY' > secrets/tskey-node-01
+chmod 600 secrets/tskey-node-01
 ```
+
+Ignored isn't the same as protected: `secrets/` is still synced by iCloud/Dropbox if the repo lives
+in a synced folder, and building with an explicit `path:` flake reference (instead of `.`) copies
+the whole directory into the store. Build with `.` as shown, and delete keys you've used.
 
 Tailscale SSH (`--ssh`) is already turned on by `meshnode.tailscale.ssh` in `hosts/default.nix`.
 Tags and approval come from the key, so no per-device flags are needed. Fleet-wide `tailscale up`
@@ -149,9 +154,9 @@ scripts/personalize-image.sh \
   -i pi0-image/meshnode-pi0-*.img.zst \
   -o node-01.img \
   -n node-01 \
-  -k ~/secrets/tskey-node-01 \
-  -w ~/secrets/wifi.conf \
-  -s ~/secrets/extra_authorized_keys
+  -k secrets/tskey-node-01 \
+  -w secrets/wifi.conf \
+  -s secrets/extra_authorized_keys
 ```
 
 `-i` is the `.img.zst` inside the `nix build` output link (`result/` if you didn't pass `-o`).
@@ -171,9 +176,9 @@ partition mounts as **FIRMWARE** on macOS, Windows and Linux. Before the card's 
 files in its `node/` folder (a `README.txt` there lists them):
 
 ```sh
-cp ~/secrets/tskey-node-01 /Volumes/FIRMWARE/node/tailscale-authkey   # macOS
+cp secrets/tskey-node-01 /Volumes/FIRMWARE/node/tailscale-authkey   # macOS
 echo NODE_HOSTNAME=node-01 > /Volumes/FIRMWARE/node/node.env
-cp ~/secrets/wifi.conf     /Volumes/FIRMWARE/node/wpa_supplicant.conf   # optional
+cp secrets/wifi.conf     /Volumes/FIRMWARE/node/wpa_supplicant.conf   # optional
 diskutil eject /Volumes/FIRMWARE
 ```
 
