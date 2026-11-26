@@ -261,7 +261,11 @@ cmd_update() {
   stage="$FW/slot_${tgt}.new"
   rm -rf "$stage"
   mkdir -p "$stage"
-  zstd -dc "$WORK/$bootFile" | tar --no-same-owner --no-same-permissions -x -C "$stage" -f -
+  # Unpack on STATE (ext4) first, then copy onto FAT: an archive may hold hard links (older
+  # bundles did), which FAT can't store. cp -r writes each link as a separate file.
+  mkdir -p "$WORK/boot"
+  zstd -dc "$WORK/$bootFile" | tar --no-same-owner --no-same-permissions -x -C "$WORK/boot" -f -
+  cp -r "$WORK/boot/." "$stage/"
   printf '%s abslot=%s\n' "$(cat "$stage/cmdline.base")" "$tgt" > "$stage/cmdline.txt"
   rm -rf "$FW/slot_$tgt"
   mv "$stage" "$FW/slot_$tgt"

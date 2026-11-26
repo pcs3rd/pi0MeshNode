@@ -154,7 +154,9 @@ in
       ''
         mkdir -p $out
         zstd ${zstdArgs} ${slotFs} -o $out/slotfs.img.zst
-        tar -C ${slot} --sort=name --owner=0 --group=0 --numeric-owner --mtime=@1 -cf - . \
+        # --hard-dereference: the store hard-links identical files (dtbs, overlays) and the
+        # node unpacks this onto FAT, which has no hard links.
+        tar -C ${slot} --sort=name --owner=0 --group=0 --numeric-owner --mtime=@1 --hard-dereference -cf - . \
           | zstd ${zstdArgs} -o $out/boot.tar.zst
         jq -n \
           --arg board ${board} \
